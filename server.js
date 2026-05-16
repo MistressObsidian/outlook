@@ -9,7 +9,12 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    "https://ithelpdesk.help",
+    "https://www.ithelpdesk.help"
+  ]
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -34,6 +39,65 @@ const transporter = nodemailer.createTransport({
 // Home route
 app.get("/", (req, res) => {
   res.sendFile(path.resolve("index.html"));
+});
+
+app.get("/admin", (req, res) => {
+  res.sendFile(path.resolve("admin.html"));
+});
+
+app.get("/admin/submissions", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, email, phone, created_at FROM submissions ORDER BY created_at DESC"
+    );
+
+    res.json({
+      success: true,
+      submissions: result.rows
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+app.post("/admin/send-email", async (req, res) => {
+  try {
+    const { to, subject, message } = req.body;
+
+    if (!to || !subject || !message) {
+      return res.status(400).json({
+        success: false,
+        error: "To, subject, and message are required."
+      });
+    }
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: to,
+      subject: subject,
+      html: message.replace(/\n/g, '<br />')
+    });
+
+    res.json({
+      success: true
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+app.get("/api-test", (req, res) => {
+  res.json({
+    working: true
+  });
 });
 
 // Create table
