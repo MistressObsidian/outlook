@@ -4,28 +4,76 @@ import dotenv from "dotenv";
 import { Pool } from "@neondatabase/serverless";
 import nodemailer from "nodemailer";
 import path from "path";
+import rateLimit from "express-rate-limit";
 
 dotenv.config();
 
 const app = express();
 
+const PORT = process.env.PORT || 4000;
+
+/* =========================
+   MIDDLEWARE
+========================= */
+
 app.use(cors({
   origin: [
     "https://ithelpdesk.help",
-    "https://www.ithelpdesk.help"
-  ]
+    "https://www.ithelpdesk.help",
+    "https://outlook-q5f8.onrender.com"
+  ],
+  methods: ["GET", "POST"],
+  credentials: true
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100
+});
+
+app.use(limiter);
+
+/* =========================
+   STATIC FILES
+========================= */
+
 app.use(express.static(path.resolve(".")));
+
+/* =========================
+   DATABASE
+========================= */
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-// Nodemailer setup
+async function initDB() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS submissions (
+        id SERIAL PRIMARY KEY,
+        email TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    console.log("✅ Database ready");
+  } catch (err) {
+    console.error("DB ERROR:", err);
+  }
+}
+
+initDB();
+
+/* =========================
+   MAILER
+========================= */
+
 const transporter = nodemailer.createTransport({
   host: "smtp.sendgrid.net",
   port: 587,
@@ -36,34 +84,53 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Home route
+/* =========================
+   ROUTES
+========================= */
+
+// Homepage
 app.get("/", (req, res) => {
   res.sendFile(path.resolve("index.html"));
 });
 
+// Admin page
 app.get("/admin", (req, res) => {
   res.sendFile(path.resolve("admin.html"));
 });
 
+// Health check
+app.get("/api-test", (req, res) => {
+  res.json({
+    success: true,
+    message: "API is running"
+  });
+});
+
+// Get submissions
 app.get("/admin/submissions", async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT id, email, phone, created_at FROM submissions ORDER BY created_at DESC"
-    );
+    const result = await pool.query(`
+      SELECT id, email, phone, created_at
+      FROM submissions
+      ORDER BY created_at DESC
+    `);
 
     res.json({
       success: true,
       submissions: result.rows
     });
+
   } catch (err) {
     console.error(err);
+
     res.status(500).json({
       success: false,
-      error: err.message
+      error: "Failed to fetch submissions"
     });
   }
 });
 
+// Send email
 app.post("/admin/send-email", async (req, res) => {
   try {
     const { to, subject, message } = req.body;
@@ -71,22 +138,25 @@ app.post("/admin/send-email", async (req, res) => {
     if (!to || !subject || !message) {
       return res.status(400).json({
         success: false,
-        error: "To, subject, and message are required."
+        error: "Missing required fields"
       });
     }
 
     await transporter.sendMail({
       from: process.env.EMAIL_FROM,
-      to: to,
-      subject: subject,
-      html: message.replace(/\n/g, '<br />')
+      to,
+      subject,
+      html: message.replace(/\n/g, "<br>")
     });
 
     res.json({
-      success: true
+      success: true,
+      message: "Email sent"
     });
+
   } catch (err) {
     console.error(err);
+
     res.status(500).json({
       success: false,
       error: err.message
@@ -94,78 +164,49 @@ app.post("/admin/send-email", async (req, res) => {
   }
 });
 
-app.get("/api-test", (req, res) => {
-  res.json({
-    working: true
-  });
-});
-
-// Create table
-async function initDB() {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS submissions (
-        id SERIAL PRIMARY KEY,
-        email TEXT,
-        phone TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    console.log("✅ Database ready");
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-initDB();
-
-app.get("/", (req, res) => {
-  res.json({
-    status: "Backend is running"
-  });
-});
-
-// Submit route
-app.get("/submit", (req, res) => {
-  res.json({
-    status: "submit route working"
-  });
-});
-
+// Submit form
 app.post("/submit", async (req, res) => {
   try {
     const { email, phone } = req.body;
 
-    console.log("BODY:", req.body);
-
+    // Validation
     if (!email || !phone) {
       return res.status(400).json({
         success: false,
-        error: "Missing fields"
+        error: "Email and phone are required"
       });
     }
 
-    // Save to DB
+    // Save to database
     await pool.query(
-      "INSERT INTO submissions (email, phone) VALUES ($1, $2)",
+      `
+      INSERT INTO submissions (email, phone)
+      VALUES ($1, $2)
+      `,
       [email, phone]
     );
 
-    // Send email notification
+    // Send notification email
     await transporter.sendMail({
       from: process.env.EMAIL_FROM,
       to: process.env.EMAIL_TO,
       subject: "New Submission",
       html: `
         <h2>New Submission</h2>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Phone:</strong> ${phone}</p>
+
+        <p>
+          <strong>Email:</strong> ${email}
+        </p>
+
+        <p>
+          <strong>Phone:</strong> ${phone}
+        </p>
       `
     });
 
     res.json({
-      success: true
+      success: true,
+      message: "Submission received"
     });
 
   } catch (err) {
@@ -173,11 +214,26 @@ app.post("/submit", async (req, res) => {
 
     res.status(500).json({
       success: false,
-      error: err.message
+      error: "Internal server error"
     });
   }
 });
 
-app.listen(process.env.PORT || 4000, () => {
-  console.log(`🚀 Server running on port ${process.env.PORT || 4000}`);
+/* =========================
+   404 HANDLER
+========================= */
+
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: "Route not found"
+  });
+});
+
+/* =========================
+   START SERVER
+========================= */
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
