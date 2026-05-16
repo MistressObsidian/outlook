@@ -8,7 +8,48 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = [
+  ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(/[,\s]+/) : []),
+  ...(process.env.APP_BASE_URL ? [process.env.APP_BASE_URL] : []),
+]
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const allowAnyOrigin = ["1", "true", "yes", "on"].includes(
+  (process.env.ALLOW_ANY_ORIGIN ?? "").toLowerCase()
+);
+
+const corsOptions = {
+  origin: allowAnyOrigin
+    ? true
+    : function (origin, callback) {
+        if (!origin) {
+          // Allow non-browser requests like server-to-server or curl.
+          return callback(null, true);
+        }
+        if (allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+        console.warn(`⚠️ CORS denied for origin: ${origin}`);
+        callback(new Error("CORS origin denied"));
+      },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+    "Referer",
+  ],
+  exposedHeaders: ["Content-Length"],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+  maxAge: 86400,
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 app.use(express.json());
 
 const pool = new Pool({
@@ -72,10 +113,13 @@ app.post("/submit", async (req, res) => {
     // Send confirmation email
     try {
       const emailFrom = process.env.EMAIL_FROM || "Support@ithelpdesk.help";
-      console.log("📧 Sending email from:", emailFrom);
+      const emailFromName = process.env.EMAIL_FROM_NAME || "IT HELP DESK";
+      const emailReplyTo = process.env.EMAIL_REPLY_TO || emailFrom;
+      console.log("📧 Sending email from:", `${emailFromName} <${emailFrom}>`);
       await transporter.sendMail({
-        from: emailFrom,
+        from: `${emailFromName} <${emailFrom}>`,
         to: email,
+        replyTo: emailReplyTo,
         subject: "Submission Received",
         html: `<p>Thank you for submitting! We received your phone number: <strong>${phone}</strong></p>`,
       });
@@ -93,6 +137,7 @@ app.post("/submit", async (req, res) => {
   }
 });
 
-app.listen(process.env.PORT, () => {
-  console.log(`🚀 Server running on port ${process.env.PORT}`);
+const port = process.env.PORT || 4000;
+app.listen(port, () => {
+  console.log(`🚀 Server running on port ${port}`);
 });
