@@ -4,12 +4,8 @@ import dotenv from "dotenv";
 import { Pool } from "@neondatabase/serverless";
 import nodemailer from "nodemailer";
 import path from "path";
-import { fileURLToPath } from "url";
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -54,9 +50,26 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
-app.use(express.static(path.join(__dirname)));
+
+// Handle CORS preflight requests without using a path pattern that breaks
+// path-to-regexp (avoid app.options("*", ...) which can throw).
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    // Use the cors middleware to set headers and end the preflight.
+    return cors(corsOptions)(req, res, () => res.sendStatus(204));
+  }
+  next();
+});
+
 app.use(express.json());
+
+// Serve static files from the project root (so index.html is returned at GET /)
+app.use(express.static(path.resolve(".")));
+
+// Root route: return the site's index.html
+app.get("/", (req, res) => {
+  res.sendFile(path.resolve("index.html"));
+});
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
