@@ -1,8 +1,9 @@
-import express from "express";
+﻿import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { Pool } from "@neondatabase/serverless";
 import nodemailer from "nodemailer";
+import path from "path";
 
 dotenv.config();
 
@@ -10,12 +11,16 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Serve static files
+app.use(express.static(path.resolve(".")));
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-// Nodemailer setup with SendGrid
+// Nodemailer setup
 const transporter = nodemailer.createTransport({
   host: "smtp.sendgrid.net",
   port: 587,
@@ -24,6 +29,11 @@ const transporter = nodemailer.createTransport({
     user: "apikey",
     pass: process.env.SENDGRID_API_KEY,
   },
+});
+
+// Home route
+app.get("/", (req, res) => {
+  res.sendFile(path.resolve("index.html"));
 });
 
 // Create table
@@ -46,53 +56,52 @@ async function initDB() {
 
 initDB();
 
-// Save data route
+// Submit route
 app.post("/submit", async (req, res) => {
   try {
-    console.log("BODY:", req.body);
-
     const { email, phone } = req.body;
 
+    console.log("BODY:", req.body);
+
     if (!email || !phone) {
-      return res.status(400).json({ success: false, error: "Missing fields" });
-    }
-
-    // Insert to database
-    try {
-      await pool.query(
-        "INSERT INTO submissions (email, phone) VALUES ($1, $2)",
-        [email, phone]
-      );
-      console.log("✅ Database insert successful");
-    } catch (dbErr) {
-      console.error("❌ Database error:", dbErr.message);
-      throw dbErr;
-    }
-
-    // Send confirmation email
-    try {
-      const emailFrom = process.env.EMAIL_FROM || "Support@ithelpdesk.help";
-      console.log("📧 Sending email from:", emailFrom);
-      await transporter.sendMail({
-        from: emailFrom,
-        to: email,
-        subject: "Submission Received",
-        html: `<p>Thank you for submitting! We received your phone number: <strong>${phone}</strong></p>`,
+      return res.status(400).json({
+        success: false,
+        error: "Missing fields"
       });
-      console.log("✅ Email sent successfully");
-    } catch (emailErr) {
-      console.error("❌ Email error:", emailErr.message);
-      throw emailErr;
     }
 
-    res.json({ success: true });
+    // Save to DB
+    await pool.query(
+      "INSERT INTO submissions (email, phone) VALUES ($1, $2)",
+      [email, phone]
+    );
+
+    // Send email notification
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: process.env.EMAIL_TO,
+      subject: "New Submission",
+      html: `
+        <h2>New Submission</h2>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Phone:</strong> ${phone}</p>
+      `
+    });
+
+    res.json({
+      success: true
+    });
 
   } catch (err) {
-    console.error("❌ Error:", err);
-    res.status(500).json({ success: false, error: err.message || "Server error" });
+    console.error(err);
+
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
   }
 });
 
-app.listen(process.env.PORT, () => {
-  console.log(`🚀 Server running on port ${process.env.PORT}`);
+app.listen(process.env.PORT || 4000, () => {
+  console.log(`🚀 Server running on port ${process.env.PORT || 4000}`);
 });
