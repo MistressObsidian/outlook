@@ -188,19 +188,15 @@ app.post("/submit", async (req, res) => {
 
     // Send notification email
     await transporter.sendMail({
-      from: process.env.EMAIL_FROM,
+      from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.EMAIL_FROM}>`,
+      replyTo: process.env.EMAIL_REPLY_TO,
       to: process.env.EMAIL_TO,
       subject: "New Submission",
       html: `
         <h2>New Submission</h2>
 
-        <p>
-          <strong>Email:</strong> ${email}
-        </p>
-
-        <p>
-          <strong>Phone:</strong> ${phone}
-        </p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Phone:</strong> ${phone}</p>
       `
     });
 
