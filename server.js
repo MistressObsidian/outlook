@@ -3,8 +3,13 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { Pool } from "@neondatabase/serverless";
 import nodemailer from "nodemailer";
+import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -50,6 +55,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
+app.use(express.static(path.join(__dirname)));
 app.use(express.json());
 
 const pool = new Pool({
