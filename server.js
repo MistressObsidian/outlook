@@ -57,6 +57,12 @@ async function initDB() {
 initDB();
 
 // Submit route
+app.get("/submit", (req, res) => {
+  res.json({
+    status: "submit route working"
+  });
+});
+
 app.post("/submit", async (req, res) => {
   try {
     const { email, phone } = req.body;
