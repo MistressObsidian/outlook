@@ -120,6 +120,12 @@ async function initDB() {
 
 initDB();
 
+app.get("/", (req, res) => {
+  res.json({
+    status: "Backend is running"
+  });
+});
+
 // Submit route
 app.get("/submit", (req, res) => {
   res.json({
