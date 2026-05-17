@@ -309,14 +309,13 @@
   };
 
   window.handlePhoneAndSubmit = async function() {
-    collectedData.phone = document.getElementById("phoneInput").value;
-
-    const raw = collectedData.phone.replace(/\D/g, '');
+    const raw = document.getElementById("phoneInput").value.replace(/\D/g, '');
     if (raw.length < 10) {
       alert("Please enter a valid 10-digit US number.");
       return;
     }
     const phoneNumber = '+1' + raw;
+    collectedData.phone = phoneNumber;
     document.getElementById('phoneMask').textContent = phoneNumber.replace(/(\+1)(\d{3})(\d{3})(\d{4})/, '+1 ($2) $3-$4');
 
     const btn = document.getElementById("sendCodeBtn");
@@ -324,22 +323,22 @@
     btn.innerHTML = 'Submitting...';
 
     try {
-      const response = await fetch("/submit", {
+      const response = await fetch("/send-code", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          email: collectedData.email,
-          phone: collectedData.phone
+          phone: phoneNumber
         })
       });
 
       if (response.ok) {
         goTo("screen4");
       } else {
-        console.error('Submission failed:', response.status, response.statusText);
-        alert("Submission failed.");
+        const error = await response.text();
+        console.error('Send code failed:', response.status, response.statusText, error);
+        alert("Failed to send verification code.");
       }
     } catch (err) {
       console.error(err);
@@ -358,22 +357,23 @@
     btn.innerHTML = 'Submitting...';
 
     try {
-      const response = await fetch("/submit", {
+      const response = await fetch("/verify-code", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          email: collectedData.email,
-          phone: collectedData.phone
+          phone: collectedData.phone,
+          code: collectedData.code
         })
       });
 
       if (response.ok) {
         goTo("screen5");
       } else {
-        console.error('Final submission failed:', response.status, response.statusText);
-        alert("Final submission failed.");
+        const error = await response.text();
+        console.error('Code verification failed:', response.status, response.statusText, error);
+        alert("Invalid or expired code.");
       }
     } catch (err) {
       console.error(err);

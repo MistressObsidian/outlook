@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { Pool } from "@neondatabase/serverless";
 import nodemailer from "nodemailer";
+import twilio from "twilio";
 import path from "path";
 import rateLimit from "express-rate-limit";
 
@@ -84,6 +85,11 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+const client = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
 /* =========================
    ROUTES
 ========================= */
@@ -126,6 +132,79 @@ app.get("/admin/submissions", async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to fetch submissions"
+    });
+  }
+});
+
+// Send verification code
+app.post("/send-code", async (req, res) => {
+  try {
+    const { phone } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        error: "Phone is required"
+      });
+    }
+
+    await client.verify.v2
+      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
+      .verifications.create({
+        to: phone,
+        channel: "sms"
+      });
+
+    res.json({
+      success: true
+    });
+
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+});
+
+// Verify code
+app.post("/verify-code", async (req, res) => {
+  try {
+    const { phone, code } = req.body;
+
+    if (!phone || !code) {
+      return res.status(400).json({
+        success: false,
+        error: "Phone and code are required"
+      });
+    }
+
+    const verificationCheck = await client.verify.v2
+      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
+      .verificationChecks.create({
+        to: phone,
+        code
+      });
+
+    if (verificationCheck.status === "approved") {
+      return res.json({
+        success: true
+      });
+    }
+
+    res.status(400).json({
+      success: false,
+      error: "Invalid code"
+    });
+
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      success: false,
+      error: err.message
     });
   }
 });
