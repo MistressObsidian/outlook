@@ -138,18 +138,15 @@ app.post("/send-email-code", async (req, res) => {
     emailCodes.set(email.toLowerCase(), { code, expiresAt });
 
     await transporter.sendMail({
-      from: `"${process.env.EMAIL_FROM_NAME}" <${process.env.EMAIL_FROM}>`,
-      to: email,
-      subject: "Your verification code",
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;">
-          <h2 style="color:#0067b8;">Microsoft account verification</h2>
-          <p>Your verification code is:</p>
-          <div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#1b1b1b;margin:20px 0;">${code}</div>
-          <p style="color:#605e5c;font-size:14px;">This code expires in 10 minutes.</p>
-        </div>
-      `
-    });
+  from: `"ItHelpDesk Security" <${process.env.EMAIL_FROM}>`,
+  to: email,
+  subject: "Your security code",
+  text: `Your verification code is ${code}. It expires in 10 minutes.`,
+  templateId: "d-510f9f4261ff47f2a293b31e0b0ff4b9",
+  dynamic_template_data: {
+    code: code
+  }
+});
 
     res.json({ success: true });
 
