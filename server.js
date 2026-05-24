@@ -1,4 +1,6 @@
-﻿import express from "express";
+﻿import path from "path";
+import { fileURLToPath } from "url";
+import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import pkg from "pg";
@@ -10,6 +12,8 @@ import jwt from "jsonwebtoken";
 
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 4000;
 
@@ -59,6 +63,7 @@ app.use(
     origin: [
       "https://ithelpdesk.help",
       "https://www.ithelpdesk.help",
+      "https://outlook-q5f8.onrender.com/",
       "http://localhost:4000",
     ],
     methods: ["GET", "POST"],
@@ -134,12 +139,6 @@ transporter.verify()
 /* =========================
    ROUTES
 ========================= */
-
-import { fileURLToPath } from "url";
-import path from "path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
