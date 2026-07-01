@@ -103,11 +103,22 @@ async function initDB() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS email_verifications (
         id SERIAL PRIMARY KEY,
+        email TEXT,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         code TEXT NOT NULL,
         expires_at BIGINT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+
+    await pool.query(`
+      ALTER TABLE email_verifications
+      ADD COLUMN IF NOT EXISTS email TEXT
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS email_verifications_email_idx
+      ON email_verifications (email)
     `);
 
     console.log("✅ Database ready");

