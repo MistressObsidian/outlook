@@ -1,0 +1,5 @@
+{
+    "chat.utilityModel": "anthropic/claude-fable-5",
+    "chat.utilitySmallModel": "anthropic/claude-fable-5",
+    "liveServer.settings.port": 5501
+}

@@ -26,7 +26,7 @@ const { Pool } = pkg;
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl:
-    process.env.NODE_ENV === "production"
+    process.env.NODE_ENV === "development"
       ? { rejectUnauthorized: false }
       : false,
 });
@@ -61,9 +61,7 @@ function auth(req, res, next) {
 app.use(
   cors({
     origin: [
-      "https://ithelpdesk.help",
-      "https://www.ithelpdesk.help",
-      "https://outlook-q5f8.onrender.com/",
+      "https://auth.basecrypto.help",
       "http://localhost:4000",
     ],
     methods: ["GET", "POST"],
@@ -82,6 +80,17 @@ app.use(
     legacyHeaders: false,
   })
 );
+
+const verifyCodeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: "Too many verification attempts. Try again later.",
+  },
+});
 
 /* =========================
    INIT DB
@@ -106,6 +115,7 @@ async function initDB() {
         email TEXT,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         code TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
         expires_at BIGINT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -114,6 +124,11 @@ async function initDB() {
     await pool.query(`
       ALTER TABLE email_verifications
       ADD COLUMN IF NOT EXISTS email TEXT
+    `);
+
+    await pool.query(`
+      ALTER TABLE email_verifications
+      ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0
     `);
 
     await pool.query(`
@@ -130,16 +145,16 @@ async function initDB() {
 initDB();
 
 /* =========================
-   MAILER (SENDGRID)
+   MAILER (RESEND)
 ========================= */
 
 const transporter = nodemailer.createTransport({
-  host: "smtp.sendgrid.net",
+  host: "smtp.resend.com",
   port: 587,
   secure: false,
   auth: {
-    user: "apikey",
-    pass: process.env.SENDGRID_API_KEY,
+    user: "resend",
+    pass: process.env.RESEND_API_KEY,
   },
 });
 
@@ -155,15 +170,33 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
+app.get("/account", (req, res) => {
+  res.sendFile(
+    path.resolve(__dirname, "../Thompson/Thompsons-Jewellers-Standalone.html")
+  );
+});
+
 /* =========================
    REGISTER
 ========================= */
+
+function normalizePhone(value) {
+  let phone = String(value || "").trim();
+  phone = phone.replace(/(?:ext\.?|extension|x)\s*\d+$/i, "").trim();
+  phone = phone.replace(/[\s().-]/g, "");
+
+  if (phone.startsWith("00")) phone = "+" + phone.slice(2);
+  if (/^\d{10}$/.test(phone)) phone = "+1" + phone;
+  else if (/^1\d{10}$/.test(phone)) phone = "+" + phone;
+
+  return /^\+[1-9]\d{6,14}$/.test(phone) ? phone : null;
+}
 
 app.post("/register", async (req, res) => {
   try {
     const { email, password, phone } = req.body;
 
-    if (!email || !password) {
+    if (!email || !password || !phone) {
       return res.status(400).json({
         success: false,
         error: "Missing fields",
@@ -171,26 +204,46 @@ app.post("/register", async (req, res) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPhone = normalizePhone(phone);
 
-    const existing = await pool.query(
-      `SELECT id FROM users WHERE email = $1 LIMIT 1`,
-      [normalizedEmail]
-    );
-
-    if (existing.rows.length) {
+    if (!normalizedPhone) {
       return res.status(400).json({
         success: false,
-        error: "User already exists",
+        error: "Enter a valid phone number with country code",
       });
     }
 
+    const existing = await pool.query(
+      `SELECT id, email_verified FROM users WHERE email = $1 LIMIT 1`,
+      [normalizedEmail]
+    );
+
     const passwordHash = await bcrypt.hash(password, 12);
+
+    if (existing.rows.length) {
+      if (existing.rows[0].email_verified) {
+        return res.status(400).json({
+          success: false,
+          error: "User already exists",
+        });
+      }
+
+      const user = await pool.query(
+        `UPDATE users
+         SET phone = $2, password_hash = $3
+         WHERE email = $1
+         RETURNING id, email`,
+        [normalizedEmail, normalizedPhone, passwordHash]
+      );
+
+      return res.json({ success: true, user: user.rows[0], retry: true });
+    }
 
     const user = await pool.query(
       `INSERT INTO users (email, phone, password_hash)
        VALUES ($1, $2, $3)
        RETURNING id, email`,
-      [normalizedEmail, phone || null, passwordHash]
+      [normalizedEmail, normalizedPhone, passwordHash]
     );
 
     res.json({
@@ -255,18 +308,36 @@ app.post("/send-email-code", async (req, res) => {
       [normalizedEmail]
     );
 
-    await pool.query(
+    const verification = await pool.query(
       `INSERT INTO email_verifications (email, code, expires_at)
-       VALUES ($1, $2, $3)`,
+       VALUES ($1, $2, $3)
+       RETURNING id`,
       [normalizedEmail, code, expiresAt]
     );
 
-    await transporter.sendMail({
-      from: `"ItHelpDesk" <${process.env.EMAIL_FROM}>`,
-      to: normalizedEmail,
-      subject: "Your Verification Code",
-      text: `Your code is ${code}. Expires in 10 minutes.`,
-    });
+    try {
+      const delivery = await transporter.sendMail({
+        from: `"ItHelpDesk" <${process.env.EMAIL_FROM}>`,
+        to: normalizedEmail,
+        subject: "Your Verification Code",
+        text: `Your code is ${code}. Expires in 10 minutes.`,
+      });
+
+      if (!delivery.accepted?.length) {
+        throw new Error("Mail provider did not accept the recipient");
+      }
+    } catch (deliveryError) {
+      // Never retain a code that the mail provider did not accept.
+      await pool.query(
+        `DELETE FROM email_verifications WHERE id = $1`,
+        [verification.rows[0].id]
+      );
+      console.error("DELIVERY ERROR:", deliveryError.message);
+      return res.status(502).json({
+        success: false,
+        error: "We could not deliver the code. Please try again.",
+      });
+    }
 
     res.json({ success: true, message: "Code sent" });
   } catch (err) {
@@ -279,14 +350,14 @@ app.post("/send-email-code", async (req, res) => {
    VERIFY EMAIL CODE
 ========================= */
 
-app.post("/verify-email-code", async (req, res) => {
+app.post("/verify-email-code", verifyCodeLimiter, async (req, res) => {
   try {
     const { email, code } = req.body;
 
-    if (!email || !code) {
+    if (!email || !/^\d{6}$/.test(String(code).trim())) {
       return res.status(400).json({
         success: false,
-        error: "Missing fields",
+        error: "Enter a valid 6-digit code",
       });
     }
 
@@ -322,9 +393,29 @@ app.post("/verify-email-code", async (req, res) => {
     }
 
     if (record.code !== code.trim()) {
+      const failedAttempt = await pool.query(
+        `UPDATE email_verifications
+         SET attempts = attempts + 1
+         WHERE id = $1
+         RETURNING attempts`,
+        [record.id]
+      );
+
+      const attempts = failedAttempt.rows[0]?.attempts ?? 5;
+      if (attempts >= 5) {
+        await pool.query(
+          `DELETE FROM email_verifications WHERE id = $1`,
+          [record.id]
+        );
+        return res.status(429).json({
+          success: false,
+          error: "Too many invalid attempts. Request a new code.",
+        });
+      }
+
       return res.status(400).json({
         success: false,
-        error: "Invalid code",
+        error: `Invalid code. ${5 - attempts} attempts remaining.`,
       });
     }
 
@@ -404,6 +495,13 @@ app.post("/login", async (req, res) => {
       return res.status(400).json({
         success: false,
         error: "Invalid credentials",
+      });
+    }
+
+    if (!user.email_verified) {
+      return res.status(403).json({
+        success: false,
+        error: "Verify your email before signing in",
       });
     }
 
