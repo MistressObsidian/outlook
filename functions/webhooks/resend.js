@@ -1,15 +1,96 @@
-import { Resend } from "resend";
-
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
 };
+
+const WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
 
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: JSON_HEADERS,
   });
+}
+
+function decodeBase64(value) {
+  const decoded = atob(value);
+  return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
+}
+
+function encodeBase64(value) {
+  let binary = "";
+
+  for (const byte of new Uint8Array(value)) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary);
+}
+
+function timingSafeEqual(left, right) {
+  if (left.length !== right.length) return false;
+
+  let difference = 0;
+
+  for (let index = 0; index < left.length; index += 1) {
+    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+
+  return difference === 0;
+}
+
+async function verifyResendWebhook({
+  payload,
+  eventId,
+  timestamp,
+  signature,
+  secret,
+}) {
+  const timestampNumber = Number(timestamp);
+  const now = Math.floor(Date.now() / 1000);
+
+  if (
+    !Number.isInteger(timestampNumber) ||
+    Math.abs(now - timestampNumber) > WEBHOOK_TOLERANCE_SECONDS
+  ) {
+    throw new Error("Webhook timestamp is invalid");
+  }
+
+  const encodedSecret = secret.startsWith("whsec_")
+    ? secret.slice("whsec_".length)
+    : secret;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    decodeBase64(encodedSecret),
+    {
+      name: "HMAC",
+      hash: "SHA-256",
+    },
+    false,
+    ["sign"],
+  );
+  const signedContent = new TextEncoder().encode(
+    `${eventId}.${timestampNumber}.${payload}`,
+  );
+  const expectedSignature = encodeBase64(
+    await crypto.subtle.sign("HMAC", key, signedContent),
+  );
+  const suppliedSignatures = signature.split(" ");
+  const verified = suppliedSignatures.some((versionedSignature) => {
+    const [version, suppliedSignature] = versionedSignature.split(",");
+
+    return (
+      version === "v1" &&
+      Boolean(suppliedSignature) &&
+      timingSafeEqual(suppliedSignature, expectedSignature)
+    );
+  });
+
+  if (!verified) {
+    throw new Error("Webhook signature does not match");
+  }
+
+  return JSON.parse(payload);
 }
 
 function maskEmail(value) {
@@ -127,7 +208,7 @@ async function sendToGoogleAppsScript(env, summary) {
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  if (!env.RESEND_API_KEY || !env.RESEND_WEBHOOK_SECRET) {
+  if (!env.RESEND_WEBHOOK_SECRET) {
     console.error("Resend webhook secrets are not configured");
     return jsonResponse(
       { success: false, error: "Webhook is not configured" },
@@ -150,15 +231,12 @@ export async function onRequestPost(context) {
   let event;
 
   try {
-    const resend = new Resend(env.RESEND_API_KEY);
-    event = resend.webhooks.verify({
+    event = await verifyResendWebhook({
       payload: rawPayload,
-      headers: {
-        id: eventId,
-        timestamp,
-        signature,
-      },
-      webhookSecret: env.RESEND_WEBHOOK_SECRET,
+      eventId,
+      timestamp,
+      signature,
+      secret: env.RESEND_WEBHOOK_SECRET,
     });
   } catch {
     return jsonResponse(
