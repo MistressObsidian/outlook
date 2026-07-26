@@ -61,7 +61,7 @@ function auth(req, res, next) {
 app.use(
   cors({
     origin: [
-      "https://auth.basecrypto.help",
+      "https://8694eeb6.official-2pf.pages.dev/",
       "http://localhost:4000",
     ],
     methods: ["GET", "POST"],
