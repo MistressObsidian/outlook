@@ -1,0 +1,21 @@
+# Public URL where this Node/Express server is reachable.
+# Use your deployed HTTPS URL in production. Do not leave this as localhost for real emails.
+PUBLIC_BASE_URL=https://your-api-domain.example
+
+# Page users should reach after the tracked link records the click.
+# This can be an absolute URL or a path such as /account.
+VERIFICATION_REDIRECT_URL=https://official-2pf.pages.dev/account
+
+# Optional: Telegram click/open notifications
+TELEGRAM_BOT_TOKEN=replace_with_your_new_bot_token
+TELEGRAM_CHAT_ID=replace_with_your_chat_id
+
+# Optional: Google Apps Script Web App URL for Google Sheets logging
+GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/REPLACE_ME/exec
+
+# Optional: false sends Telegram only for the first detected open.
+# Set true to receive alerts for repeated open-pixel loads.
+NOTIFY_REPEAT_OPENS=false
+
+# Optional: delete tracking records older than this many days.
+TRACKING_RETENTION_DAYS=90

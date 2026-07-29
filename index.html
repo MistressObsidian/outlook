@@ -349,7 +349,7 @@ window.goToAccountPage = async function () {
       return showMsg("accountMsg", data.error || "Account page unavailable", "error");
     }
 
-    window.location.assign("/account");
+    window.location.assign("https://account.microsoft.com/account");
   } catch {
     showMsg("accountMsg", "Account page unavailable", "error");
   }
